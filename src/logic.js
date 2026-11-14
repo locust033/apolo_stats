@@ -202,8 +202,9 @@ function matchFromLayout(sheet, L) {
 function eff(min, half, H) { min = +min || 0; return half === 1 ? Math.max(0, Math.min(min, H)) : Math.max(H, Math.min(min, 2 * H)); }
 function fmtMin(min, half, H) { min = +min || 0; const cap = half === 1 ? H : 2 * H; return min > cap ? `${cap}+${min - cap}` : String(min); }
 function clockMinute(clock, H, now = Date.now()) {
-  if (clock.phase === 'h1') return Math.floor((now - clock.h1Start) / 60000) + 1;
-  if (clock.phase === 'h2') return H + Math.floor((now - clock.h2Start) / 60000) + 1;
+  // minuto por el que vamos: con 11:53 en el reloj es el 11
+  if (clock.phase === 'h1') return Math.floor((now - clock.h1Start) / 60000);
+  if (clock.phase === 'h2') return H + Math.floor((now - clock.h2Start) / 60000);
   if (clock.phase === 'ht') return H;
   if (clock.phase === 'end') return 2 * H;
   return 1;

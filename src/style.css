@@ -386,3 +386,6 @@ nav.bottom button.on .ic { color: var(--accent); }
 .glist li.gnone { display: block; color: var(--muted); font-size: 13px; }
 .rpi .rtag { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--good); }
 .rpi .rinfo { color: var(--muted); font-size: 12px; font-weight: 500; }
+.picking .tok.empty .disc { box-shadow: 0 0 0 3px var(--accent); border-style: solid; }
+.picking .tok.sel .disc { animation: none; box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--accent); transform: scale(1.08); }
+.bchip { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

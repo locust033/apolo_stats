@@ -406,6 +406,9 @@ nav.bottom button.on .ic { color: var(--accent); }
 .glist li.gnone { display: block; color: var(--muted); font-size: 13px; }
 .rpi .rtag { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--good); }
 .rpi .rinfo { color: var(--muted); font-size: 12px; font-weight: 500; }
+.picking .tok.empty .disc { box-shadow: 0 0 0 3px var(--accent); border-style: solid; }
+.picking .tok.sel .disc { animation: none; box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--accent); transform: scale(1.08); }
+.bchip { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 
 </style>
 </head>
@@ -617,8 +620,9 @@ function matchFromLayout(sheet, L) {
 function eff(min, half, H) { min = +min || 0; return half === 1 ? Math.max(0, Math.min(min, H)) : Math.max(H, Math.min(min, 2 * H)); }
 function fmtMin(min, half, H) { min = +min || 0; const cap = half === 1 ? H : 2 * H; return min > cap ? `${cap}+${min - cap}` : String(min); }
 function clockMinute(clock, H, now = Date.now()) {
-  if (clock.phase === 'h1') return Math.floor((now - clock.h1Start) / 60000) + 1;
-  if (clock.phase === 'h2') return H + Math.floor((now - clock.h2Start) / 60000) + 1;
+  // minuto por el que vamos: con 11:53 en el reloj es el 11
+  if (clock.phase === 'h1') return Math.floor((now - clock.h1Start) / 60000);
+  if (clock.phase === 'h2') return H + Math.floor((now - clock.h2Start) / 60000);
   if (clock.phase === 'ht') return H;
   if (clock.phase === 'end') return 2 * H;
   return 1;
@@ -1325,7 +1329,31 @@ function removeEvent(m, id) {
   m.events = m.events.filter(x => x.id !== id);
   touch(m);
 }
-const nowMinute = m => ({ min: Math.max(1, clockMinute(m.clock, H())), half: clockHalf(m.clock) });
+// en el primer minuto de cada parte se apunta el 1 (o el 46), para no confundir partes
+// Cambio de posición tocando el campo: otra jugadora (se intercambian) o un hueco libre
+function doMove(m, slot) {
+  const pid = UI.pickMove; UI.pickMove = null;
+  const comp = compute(m, H());
+  const from = m.clock.phase === 'pre' ? Object.keys(m.lineup).find(k => m.lineup[k] === pid) : Object.keys(comp.field).find(k => comp.field[k] === pid);
+  if (!from || String(from) === String(slot)) return render();
+  if (m.clock.phase === 'pre') { const other = m.lineup[slot]; m.lineup[slot] = pid; if (other) m.lineup[from] = other; else delete m.lineup[from]; return touch(m); }
+  const other = comp.field[slot];
+  addEvent(m, { t: 'move', pid, slot: +slot, ...nowMinute(m) });
+  const ev = m.events[m.events.length - 1]; const nm = rmap(m);
+  showToast(other ? `${title(nm[pid].name)} pasa al ${slot} y ${title(nm[other].name)} al ${from} (${fmtMin(ev.min, ev.half, H())}')` : `${title(nm[pid].name)} pasa al ${slot} (${fmtMin(ev.min, ev.half, H())}')`, ev.id);
+}
+// Mantener pulsada una suplente: más opciones (tarjetas en el banquillo, etc.)
+let lpTimer = null, lpStart = null, lpAt = 0;
+const lpFired = () => Date.now() - lpAt < 700;
+document.addEventListener('pointerdown', ev => {
+  const el = ev.target.closest('.bchip[data-id]'); if (!el) return;
+  lpStart = { x: ev.clientX, y: ev.clientY }; clearTimeout(lpTimer);
+  lpTimer = setTimeout(() => { lpAt = Date.now(); if (navigator.vibrate) navigator.vibrate(15); UI.pickIn = null; UI.pickMove = null; openSheet({ type: 'bench', pid: el.dataset.id }); }, 480);
+});
+document.addEventListener('pointermove', ev => { if (lpStart && Math.hypot(ev.clientX - lpStart.x, ev.clientY - lpStart.y) > 10) { clearTimeout(lpTimer); lpStart = null; } });
+for (const t of ['pointerup', 'pointercancel']) document.addEventListener(t, () => { clearTimeout(lpTimer); lpStart = null; });
+document.addEventListener('contextmenu', ev => { if (ev.target.closest('.bchip')) ev.preventDefault(); });
+const nowMinute = m => { const half = clockHalf(m.clock); return { min: Math.max(half === 2 && m.clock.phase === 'h2' ? H() + 1 : 1, clockMinute(m.clock, H())), half }; };
 
 // ===== AVISOS Y PANTALLA ENCENDIDA =====
 let toastTimer = null;
@@ -1522,7 +1550,7 @@ function pitch(m, mode, comp) {
     if (!p) { html += `<button class="tok empty" ${pos} data-act="${mode === 'live' ? 'liveSlot' : 'slot'}" data-slot="${slot}"><span class="disc">${slot}</span><span class="nm">${mode === 'live' ? 'Libre' : 'Elegir'}</span></button>`; continue; }
     const c = comp && comp.P[id];
     const badges = (m.captain === id ? '<i class="cap">C</i>' : '') + (c && c.y ? `<i class="yc">${c.y > 1 ? 2 : ''}</i>` : '') + (c && c.g ? `<i class="gl">${c.g > 1 ? c.g : ''}${IC.ball}</i>` : '');
-    html += `<button class="tok" ${pos} data-act="${mode === 'live' ? 'livePlayer' : 'slot'}" data-slot="${slot}" data-id="${esc(id)}">
+    html += `<button class="tok ${mode === 'live' && UI.pickMove === id ? 'sel' : ''}" ${pos} data-act="${mode === 'live' ? 'livePlayer' : 'slot'}" data-slot="${slot}" data-id="${esc(id)}">
       <span class="disc">${esc(p.dorsal)}${badges}</span><span class="nm">${esc(short(p.name))}</span>${mode === 'live' && c ? `<span class="mins">${c.min}'</span>` : `<span class="mins">${slot}</span>`}</button>`;
   }
   return `<div class="pitch">${pitchSVG()}${html}</div>`;
@@ -1613,10 +1641,11 @@ function liveView(m) {
     ${imported ? `<div class="banner">Este partido ya estaba en el Excel. Si apuntas un gol nuevo, el marcador se recalcula solo con los goles apuntados aquí.</div>` : ''}
     <div class="quick two"><button class="btn rgoal" data-act="rgoalStart">${IC.ball} Gol rival</button><button class="btn" data-act="rcardStart">${IC.card('Y')} Tarjeta rival</button></div>
     <p class="muted small hint">Para un gol nuestro, toca a la goleadora en el campo.</p>
+    ${UI.pickMove ? `<div class="pickbar"><span>Cambio de posición de <b>${esc(title(rmap(m)[UI.pickMove]?.name || ''))}</b>: toca su nueva posición (otra jugadora o un hueco libre)</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
     ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale${Object.keys(comp.field).length < 11 ? ' o un hueco libre' : ''}</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
-    <div class="${UI.pickIn ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
+    <div class="${UI.pickIn || UI.pickMove ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
     <div class="formline"><span class="muted small">${Object.keys(comp.field).length < 11 && m.clock.phase !== 'pre' ? `<b class="short">${Object.keys(comp.field).length} en el campo</b> · ` : ''}Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
-    <h3 class="h3">Banquillo <span class="muted small">toca una y luego a quién sustituye</span></h3>
+    <h3 class="h3">Banquillo <span class="muted small">toca una y luego a quién sustituye · mantén pulsada para tarjetas</span></h3>
     <div class="benchrow">${bench.map(p => { const c = comp.P[p.id]; const dis = c.expelled;
       return `<button class="bchip ${dis ? 'dim' : ''} ${UI.pickIn === p.id ? 'sel' : ''}" data-act="${dis ? 'noop' : 'benchIn'}" data-id="${esc(p.id)}"><span class="disc sm">${esc(p.dorsal)}</span><span class="bn">${esc(short(p.name))}<small>${c.min ? `${c.min}' jugados` : 'sin jugar'}${c.leftAt != null && !c.expelled ? ` · fuera desde el ${c.leftAt}'` : ''}</small></span>${c.expelled ? IC.card('R') : ''}</button>`; }).join('') || '<span class="muted small">Sin suplentes</span>'}</div>
     <h3 class="h3">Lo que ha pasado</h3>
@@ -1918,6 +1947,17 @@ function renderSheet() {
       body = (m.clock.phase === 'pre' ? '' : minuteField(s)) + (bench.length ? plist(m, bench, 'enterPick') : '<p class="muted small">No hay nadie disponible en el banquillo.</p>');
       break;
     }
+    case 'bench': {
+      const c = comp.P[s.pid];
+      h = `${n(s.pid)} <small>en el banquillo${c ? ' · ' + c.min + "' jugados" : ''}</small>`;
+      body = `<div class="acts grid">
+        ${c && !c.expelled ? `<button class="btn primary" data-act="benchEnter">${IC.sub} Entrar al campo</button>` : ''}
+        <button class="btn" data-act="cardFrom" data-v="Y">${IC.card('Y')} Amarilla</button>
+        <button class="btn" data-act="cardFrom" data-v="R">${IC.card('R')} Roja</button>
+        <button class="btn ${m.captain === s.pid ? 'on' : ''}" data-act="setCap" data-id="${esc(s.pid)}">${IC.star} Capitana</button></div>
+        <p class="muted small">Las tarjetas en el banquillo cuentan igual en el Excel. Con roja ya no puede entrar.</p>`;
+      break;
+    }
     case 'player': {
       const c = comp.P[s.pid];
       h = `${n(s.pid)} <small>${c ? c.min + "' jugados" : ''}</small>`;
@@ -2116,10 +2156,11 @@ const ACT = {
   markEnd() { const m = cur(); m.clock.phase = 'end'; touch(m); },
   adjust() { const m = cur(); openSheet({ type: 'adjust', ...nowMinute(m) }); },
   adjSave() { const m = cur(); const s = UI.sheet; const mins = Math.max(1, +s.min || 1); const now = Date.now();
-    if (s.half === 1) { m.clock.phase = 'h1'; m.clock.h1Start = now - (mins - 1) * 60000; } else { m.clock.phase = 'h2'; m.clock.h2Start = now - Math.max(0, mins - H() - 1) * 60000; }
+    if (s.half === 1) { m.clock.phase = 'h1'; m.clock.h1Start = now - mins * 60000; } else { m.clock.phase = 'h2'; m.clock.h2Start = now - Math.max(0, mins - H()) * 60000; }
     closeSheet(); touch(m); },
   livePlayer(el) {
     const m = cur(); const out = el.dataset.id;
+    if (UI.pickMove) return doMove(m, +el.dataset.slot);
     if (UI.pickIn) {
       const inn = UI.pickIn; UI.pickIn = null;
       if (m.clock.phase === 'pre') { // antes de empezar: cambia el once
@@ -2143,6 +2184,7 @@ const ACT = {
   },
   liveSlot(el) {
     const m = cur(); const slot = +el.dataset.slot;
+    if (UI.pickMove) return doMove(m, slot);
     if (UI.pickIn) {
       const pid = UI.pickIn; UI.pickIn = null;
       if (m.clock.phase === 'pre') { m.lineup[slot] = pid; return touch(m); }
@@ -2153,7 +2195,7 @@ const ACT = {
     openSheet({ type: 'enter', slot, ...nowMinute(m) });
   },
   enterPick(el) { const m = cur(); const s = UI.sheet; closeSheet(); if (m.clock.phase === 'pre') { m.lineup[s.slot] = el.dataset.id; return touch(m); } addEvent(m, { t: 'in', pid: el.dataset.id, slot: s.slot, min: +s.min || 1, half: s.half }); },
-  pickCancel() { UI.pickIn = null; render(); },
+  pickCancel() { UI.pickIn = null; UI.pickMove = null; render(); },
   undoToast() { const m = cur(); const t = UI.toast; UI.toast = null; if (t && t.undo) removeEvent(m, t.undo); else render(); },
   goalStart() { const m = cur(); openSheet({ type: 'goal', step: 'scorer', ...nowMinute(m) }); },
   goalFrom() { const m = cur(); openSheet({ type: 'goal', step: 'assist', scorer: UI.sheet.pid, ...nowMinute(m) }); },
@@ -2193,11 +2235,12 @@ const ACT = {
   cardFrom(el) { const m = cur(); openSheet({ type: 'card', pid: UI.sheet.pid, color: el.dataset.v, ...nowMinute(m) }); },
   cSave() { const m = cur(), s = UI.sheet; closeSheet(); addEvent(m, { t: 'card', pid: s.pid, color: s.color, min: +s.min || 1, half: s.half }); },
   subFrom() { const m = cur(); openSheet({ type: 'sub', out: UI.sheet.pid, ...nowMinute(m) }); },
-  benchIn(el) { UI.pickIn = UI.pickIn === el.dataset.id ? null : el.dataset.id; render(); },
+  benchIn(el) { if (lpFired()) return; UI.pickMove = null; UI.pickIn = UI.pickIn === el.dataset.id ? null : el.dataset.id; render(); },
+  benchEnter() { const pid = UI.sheet.pid; closeSheet(); UI.pickMove = null; UI.pickIn = pid; render(); },
   subIn(el) { UI.sheet.in = el.dataset.id; renderSheet(); },
   subOut(el) { UI.sheet.out = el.dataset.id; renderSheet(); },
   subSave() { const m = cur(), s = UI.sheet; closeSheet(); addEvent(m, { t: 'sub', out: s.out, in: s.in, min: +s.min || 1, half: s.half }); },
-  moveFrom() { const m = cur(); openSheet({ type: 'move', pid: UI.sheet.pid, ...nowMinute(m) }); },
+  moveFrom() { const pid = UI.sheet.pid; closeSheet(); UI.pickIn = null; UI.pickMove = pid; render(); },
   mvSlot(el) { UI.sheet.slot = el.dataset.v; renderSheet(); },
   mvSave() { const m = cur(), s = UI.sheet; closeSheet(); addEvent(m, { t: 'move', pid: s.pid, slot: +s.slot, min: +s.min || 1, half: s.half }); },
   evEdit(el) { const m = cur(); const e = m.events.find(x => x.id === el.dataset.id); if (e) openSheet({ type: 'event', eid: e.id, min: e.min, half: e.half, desc: e.desc || '' }); },
