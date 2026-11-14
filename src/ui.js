@@ -306,6 +306,35 @@ async function saveToSheet(m) {
   render();
 }
 
+// ===== BORRAR UNA JORNADA DEL EXCEL =====
+// Deja la hoja como la plantilla: conserva textos fijos, nombres, dorsales y formato; vacía todo lo apuntado.
+async function wipeJornada(m) {
+  if (!ready()) { UI.sync = 'error'; UI.syncMsg = 'Entra con Google para poder borrar la jornada del Excel.'; return render(); }
+  UI.sync = 'saving'; UI.syncMsg = 'Borrando la jornada…'; render();
+  try {
+    const t = m.title; const L = parseLayout(await readRows(t));
+    const blank = (n, w) => Array.from({ length: n }, () => Array(w).fill(''));
+    const writes = [
+      [`${qs(t)}!D8:D11`, blank(4, 1)],
+      [`${qs(t)}!K8:K11`, [[''], [''], [null], ['']]],
+      [`${qs(t)}!A${L.hdr + 2}:M${L.total}`, L.players.map(r => r.blank ? Array(13).fill(null) : [null, null, false, false, '', '', '', '', false, '', '', '', L.hasCap ? false : null])],
+    ];
+    if (L.rh >= 0) { writes.push([`${qs(t)}!A${L.rh + 2}:F${L.rh + 12}`, blank(11, 6)]); writes.push([`${qs(t)}!H${L.rh + 14}`, [['']]]); }
+    if (L.sist >= 0) writes.push([`${qs(t)}!H${L.sist + 3}`, [['']]]);
+    if (L.plan >= 0) writes.push([`${qs(t)}!A${L.plan + 2}`, [['']]]);
+    if (L.cron >= 0) writes.push([`${qs(t)}!A${L.cron + 2}:E${L.cron + 2}`, [['', null, null, null, '']]]);
+    if (L.obs >= 0) writes.push([`${qs(t)}!A${L.obs + 2}`, [['']]]);
+    if (L.gh >= 0) { writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, blank(11, 3)]); writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, blank(11, 4).map(r => [r[0], null, r[2], r[3]])]); }
+    await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
+    delete S.stats.sums[m.sheetId]; delete S.matches[m.sheetId];
+    if (UI.editStats) delete UI.editStats[m.sheetId];
+    UI.sync = 'ok'; UI.syncMsg = 'Jornada borrada';
+    S.ui.step = 'previa'; persist();
+    await openMatch(m.sheetId, { reload: true });
+    showToast(`Jornada ${sheetShort(t).n} borrada del Excel`);
+  } catch (e) { UI.sync = 'error'; UI.syncMsg = 'No se pudo borrar del todo: ' + errText(e) + ' Vuelve a intentarlo.'; render(); }
+}
+
 // ===== ESTADÍSTICAS =====
 async function loadStats(force = false) {
   if (!ready() || UI.statsProgress) return;
@@ -668,7 +697,7 @@ function summaryView(m) {
       <p class="muted small">Nosotras – ${esc(title(sheetShort(m.title).name))}${m.formationText || m.formation ? ' · sistema ' + esc(m.formationText || m.formation) : ''}${m.rival.formation ? ' · rival ' + esc(m.rival.formation) : ''}</p>
     </div>
     ${edit ? `<div class="lockbar open"><span>Editando estadísticas: los cambios se escriben en el Excel al guardar.</span><button class="link" data-act="editStatsOff">Hecho</button></div>`
-           : `<div class="acts"><button class="btn" data-act="askEditStats">Cambiar estadísticas</button></div>`}
+           : `<div class="acts"><button class="btn" data-act="askEditStats">Cambiar estadísticas</button><button class="btn danger" data-act="askWipeJ">Borrar datos de la jornada</button></div>`}
     <h3 class="h3">Jugadoras</h3>
     <div class="tablewrap"><table class="review"><thead><tr><th>Jugadora</th><th>T/S</th><th>Min</th><th>Pos</th><th>G</th><th>A</th><th>GP</th><th>TA</th><th>TR</th></tr></thead><tbody>
       ${rows.map(p => `<tr><th><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}${st[p.id].cap ? ' <i class="cap inl">C</i>' : ''}${st[p.id].mvp ? ' <i class="mvpi">MVP</i>' : ''}</th>
@@ -985,6 +1014,13 @@ const ACT = {
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
   finalize() { const m = cur(); m.finalized = true; if (UI.editStats) delete UI.editStats[m.sheetId]; touch(m); window.scrollTo(0, 0); saveToSheet(m); },
+  askWipeJ() {
+    const m = cur();
+    openSheet({ type: 'confirm', title: 'Borrar datos de la jornada',
+      text: `Vas a borrar <b>todos los datos</b> de la hoja <b>«${esc(m.title)}»</b> del Excel: resultado, lugar, fecha y horas, convocatoria, titulares, minutos, posiciones, goles, asistencias, tarjetas, MVP, capitana, rival, sistemas, planteamiento, crónicas, goles y observaciones. Se mantienen los nombres y dorsales de la plantilla y el formato. <b>No se puede deshacer.</b>`,
+      ok: 'Sí, borrar la jornada', act: 'doWipeJ' });
+  },
+  doWipeJ() { const m = cur(); closeSheet(); wipeJornada(m); },
   askEditStats() { openSheet({ type: 'confirm', title: 'Cambiar estadísticas', text: 'Estás a punto de cambiar las estadísticas de un partido finalizado (minutos, goles, tarjetas, MVP…). ¿Seguro?', ok: 'Sí, cambiar', act: 'editStatsOn' }); },
   editStatsOn() { const m = cur(); (UI.editStats = UI.editStats || {})[m.sheetId] = true; closeSheet(); render(); },
   editStatsOff() { const m = cur(); if (UI.editStats) delete UI.editStats[m.sheetId]; render(); },
