@@ -338,7 +338,11 @@ function aggregate(summaries) {
   const games = summaries.filter(s => s.played).sort((a, b) => a.n - b.n);
   const team = { pj: 0, w: 0, d: 0, l: 0, gf: 0, gc: 0, pts: 0, cs: 0, gf1: 0, gf2: 0, gc1: 0, gc2: 0, tramosF: [0,0,0,0,0,0], tramosC: [0,0,0,0,0,0] };
   const byP = {};
+  let gamesMin = 0;
   for (const g of games) {
+    // jornada sin minutos apuntados (p. ej. no se pudieron coger datos): no cuenta para las medias de minutos
+    g.noMin = !g.players.some(p => p.min > 0);
+    if (!g.noMin) gamesMin++;
     if (g.final) {
       team.pj++; const [a, b] = g.final; team.gf += a; team.gc += b;
       if (a > b) { team.w++; team.pts += 3; } else if (a === b) { team.d++; team.pts += 1; } else team.l++;
@@ -350,14 +354,15 @@ function aggregate(summaries) {
     for (const r of g.goals.ours) { const t = tramo(r[0]); if (t >= 0) team.tramosF[t]++; }
     for (const r of g.goals.theirs) { const t = tramo(r[0]); if (t >= 0) team.tramosC[t]++; }
     for (const p of g.players) {
-      const o = byP[p.key] || (byP[p.key] = { key: p.key, name: p.name, dorsal: p.dorsal, conv: 0, pj: 0, tit: 0, min: 0, g: 0, a: 0, mvp: 0, gp: 0, ta: 0, tr: 0, cap: 0, games: [] });
+      const o = byP[p.key] || (byP[p.key] = { key: p.key, name: p.name, dorsal: p.dorsal, conv: 0, pj: 0, tit: 0, min: 0, g: 0, a: 0, mvp: 0, gp: 0, ta: 0, tr: 0, cap: 0, convMin: 0, games: [] });
       o.dorsal = p.dorsal;
+      if (p.conv && !g.noMin) o.convMin++;
       if (p.conv) o.conv++; if (p.played) o.pj++; if (p.tit) o.tit++;
       o.min += p.min; o.g += p.g; o.a += p.a; o.mvp += p.mvp ? 1 : 0; o.gp += p.gp; o.ta += p.ta; o.tr += p.tr; o.cap += p.cap ? 1 : 0;
-      o.games.push({ n: g.n, rival: g.rival, ...p });
+      o.games.push({ n: g.n, rival: g.rival, noMin: g.noMin, ...p });
     }
   }
-  return { games, team, players: Object.values(byP) };
+  return { games, team, gamesMin, players: Object.values(byP) };
 }
 
 if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };

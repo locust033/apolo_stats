@@ -8,7 +8,7 @@ const LS_KEY = 'apolo-partidos-v1';
 const SEED_SHEETS = [[1598450505,'1 - AIELO'],[1512215096,'2 - ALZIRA'],[1760258037,'3 - S.D. SUECA'],[143274566,'4 - TORRENT'],[471312833,'5 - ALCÚDIA'],[1947815952,'6 - ALFAFAR'],[1860936496,'7 - PROMESES'],[1736839393,'8 - AYORENSE'],[1082152474,'9 - SILLA'],[1197693661,'10 - Bº CRISTO'],[1492774495,'11 - XÀTIVA'],[1680599170,'12 - MALILLA'],[1471336960,'13 - AIELO'],[1891846995,'14 - ALZIRA'],[1252392307,'15 - SUECA'],[1224766389,'16 - TORRENT'],[1522889650,'17 - ALCÚDIA'],[2097235616,'18 - ALFAFAR'],[1251927104,'19 - PROMESES'],[2114525778,'20 - AYORENSE'],[1393940978,'21 - SILLA'],[1305304429,'22 - Bº CRISTO'],[104445972,'23 - XÀTIVA'],[1901217019,'24 - MALILLA']].map(([id,title])=>({id,title}));
 
 function defaultState() {
-  return { settings: { sid: DEFAULT_SID, half: 45, clientId: '' }, sheets: SEED_SHEETS, current: null, matches: {}, extrasPool: [], stats: { v: 2, at: 0, sums: {} },
+  return { settings: { sid: DEFAULT_SID, half: 45, clientId: '' }, sheets: SEED_SHEETS, current: null, matches: {}, extrasPool: [], stats: { v: 3, at: 0, sums: {} },
     ui: { tab: 'match', step: 'previa', stab: 'equipo', sort: 'min', dir: -1 } };
 }
 let S = defaultState();
@@ -1077,11 +1077,11 @@ function playersStats(A) {
   const k = S.ui.sort, d = S.ui.dir;
   const full = 2 * H();
   // minutos sobre los que podía jugar: solo partidos en los que estuvo convocada
-  const list = A.players.map(p => ({ ...p, mconv: p.conv ? p.min / (p.conv * full) : 0 })).sort((a, b) => ((k === 'name' ? a.name.localeCompare(b.name) : a[k] - b[k]) * (d < 0 ? -1 : 1)) || a.name.localeCompare(b.name));
-  const maxMin = A.games.length * 2 * H();
-  return `<p class="muted small">Toca una cabecera para ordenar y una jugadora para ver su detalle. <b>Min</b>: minutos totales (y % de todos los partidos). <b>Min/conv</b>: media de minutos por partido en el que estuvo convocada (y % de los minutos que pudo jugar).</p>
+  const list = A.players.map(p => ({ ...p, mconv: p.convMin ? p.min / (p.convMin * full) : 0 })).sort((a, b) => ((k === 'name' ? a.name.localeCompare(b.name) : a[k] - b[k]) * (d < 0 ? -1 : 1)) || a.name.localeCompare(b.name));
+  const maxMin = Math.max(1, A.gamesMin) * 2 * H();
+  return `<p class="muted small">Toca una cabecera para ordenar y una jugadora para ver su detalle. <b>Min</b>: minutos totales (y % de todos los partidos). <b>Min/conv</b>: media de minutos por partido en el que estuvo convocada (y % de los minutos que pudo jugar).${A.games.some(g => g.noMin) ? ` Sin datos de minutos (no cuentan en las medias): ${A.games.filter(g => g.noMin).map(g => 'J' + g.n).join(', ')}.` : ''}</p>
     <div class="tablewrap"><table class="stats"><thead><tr>${cols.map(([c, l]) => `<th><button data-act="sort" data-v="${c}" class="${k === c ? 'on' : ''}">${l}${k === c ? (d < 0 ? ' ↓' : ' ↑') : ''}</button></th>`).join('')}</tr></thead>
-    <tbody>${list.map(p => `<tr data-act="pdetail" data-key="${esc(p.key)}"><th><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}</th><td>${p.conv}</td><td>${p.pj}</td><td>${p.tit}</td><td>${p.min || '—'}${p.min ? `<span class="pct">${Math.round(p.min / maxMin * 100)}%</span>` : ''}</td><td>${p.conv ? `${Math.round(p.min / p.conv)}'<span class="pct">${Math.round(p.mconv * 100)}%</span>` : '—'}</td><td>${p.g || ''}</td><td>${p.a || ''}</td><td>${p.mvp || ''}</td><td>${p.ta || ''}</td><td>${p.tr || ''}</td></tr>`).join('')}</tbody></table></div>`;
+    <tbody>${list.map(p => `<tr data-act="pdetail" data-key="${esc(p.key)}"><th><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}</th><td>${p.conv}</td><td>${p.pj}</td><td>${p.tit}</td><td>${p.min || '—'}${p.min ? `<span class="pct">${Math.round(p.min / maxMin * 100)}%</span>` : ''}</td><td>${p.convMin ? `${Math.round(p.min / p.convMin)}'<span class="pct">${Math.round(p.mconv * 100)}%</span>` : '—'}</td><td>${p.g || ''}</td><td>${p.a || ''}</td><td>${p.mvp || ''}</td><td>${p.ta || ''}</td><td>${p.tr || ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function rivalStats(A) {
   return A.games.map(g => `<div class="card scout"><div class="eyebrow">J${g.n} · ${esc(title(g.rival))}</div>
@@ -1267,12 +1267,12 @@ function playerGames(p, A) {
     const conv = g.conv || g.played;
     // iconos junto al rival; la barra va sola en su línea para que todas las jornadas midan igual
     const head = `<span class="jn">J${g.n}</span><span class="jr"><span class="jrn">${esc(title(g.rival))}</span>${conv ? `<span class="jicons">${icons(g)}</span>` : ''}</span>${res(g.n)}
-      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b>` : '<em>No convocada</em>'}</span>`;
+      <span class="jbar">${conv && g.noMin ? '<em>Sin datos de minutos</em>' : conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b>` : '<em>No convocada</em>'}</span>`;
     if (!conv) return `<div class="jg off">${head}</div>`;
     const pos = str(g.pos).split(/\s+/).filter(Boolean);
     const rows = [
       ['Papel', g.tit ? 'Titular' : 'Suplente'],
-      ['Minutos', `${g.min || 0}'`],
+      ['Minutos', g.noMin ? 'Sin datos' : `${g.min || 0}'`],
       [pos.length > 1 ? 'Posiciones' : 'Posición', pos.length ? [...new Set(pos.map(x => POS_NAME[+x] || x))].map(x => `<span class="poschip">${esc(x)}</span>`).join('') : '—'],
       g.g ? ['Goles', '⚽'.repeat(Math.min(g.g, 6)) + (g.g > 6 ? ` ×${g.g}` : '')] : null,
       g.a ? ['Asistencias', String(g.a)] : null,
@@ -1475,7 +1475,7 @@ const ACT = {
     if (!ready()) { persist(); UI.editSid = false; return signIn(''); }
     try {
       await call('get_spreadsheet', {}, { read: true });
-      UI.editSid = false; UI.err.sid = null; UI.err.auth = null; S.stats = { v: 2, at: 0, sums: {} };
+      UI.editSid = false; UI.err.sid = null; UI.err.auth = null; S.stats = { v: 3, at: 0, sums: {} };
       if (prev !== S.settings.sid) S.matches = {};
       persist(); S.ui.tab = 'match'; initAuth();
     } catch (e) { S.settings.sid = prev; UI.err.sid = 'No he podido abrir ese Excel: ' + errText(e); render(); }
@@ -1729,7 +1729,7 @@ setInterval(() => {
 
 function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}
-  if (S.stats.v !== 2) S.stats = { v: 2, at: 0, sums: {} };
+  if (S.stats.v !== 3) S.stats = { v: 3, at: 0, sums: {} }; // v3: sin Ainhoa y minutos por jornada
   Object.values(S.matches).forEach(migrateMatch);
   if (S.current == null) S.current = S.sheets[0].id;
   pickStartJornada(); S.ui.railOpen = false;
