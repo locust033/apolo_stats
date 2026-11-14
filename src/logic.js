@@ -140,6 +140,7 @@ function matchFromLayout(sheet, L) {
   if (played) {
     m.imp = { score: { h1: L.h1, h2: L.h2, final: L.final }, goals: L.goals };
     m.clock.phase = 'end';
+    m.finalized = !!L.final; // con resultado en el Excel: jornada finalizada
     const slots = FORMATIONS[m.formation];
     for (const p of L.players) {
       if (p.blank || !(p.tit || p.sup)) continue;
@@ -196,6 +197,11 @@ function compute(m, H, now = Date.now()) {
       const s = slotOf(e.out); if (!s || P[e.in].on || P[e.in].expelled) continue;
       leave(e.out, at); P[e.out].out = true;
       field[s] = e.in; P[e.in].on = true; P[e.in].inAt = at; P[e.in].pos.push(+s);
+    }
+    else if (e.t === 'out' && P[e.pid]) { leave(e.pid, at); P[e.pid].out = true; } // sale sin cambio (a respirar)
+    else if (e.t === 'in' && P[e.pid]) { // entra a un hueco libre
+      const s = String(e.slot); if (field[s] || P[e.pid].on || P[e.pid].expelled) continue;
+      field[s] = e.pid; P[e.pid].on = true; P[e.pid].inAt = at; P[e.pid].pos.push(+s);
     }
     else if (e.t === 'move' && P[e.pid]) {
       const from = slotOf(e.pid); if (!from || String(from) === String(e.slot)) continue;

@@ -436,6 +436,10 @@ function pickStartJornada() {
 }
 function matchView(m) {
   if (!m) return jornadaRail() + `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
+  if (m.finalized) {
+    const loading0 = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
+    return jornadaRail() + loading0 + `<section class="pad">${summaryView(m)}</section>`;
+  }
   const step = S.ui.step;
   const tabs = `<div class="steps">${STEPS.map(([k, l], i) => `<button class="${step === k ? 'on' : ''}" data-act="step" data-v="${k}"><i>${i + 1}</i>${l}</button>`).join('')}</div>`;
   const loading = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
@@ -494,8 +498,9 @@ function scoutCard(m) {
 
 // ---- Protección de partidos terminados ----
 const isFinished = m => !!m && m.clock.phase === 'end';
-const isLocked = m => isFinished(m) && !(UI.unlocked || {})[m.sheetId];
+const isLocked = m => false; // sustituido por la vista de jornada finalizada
 function lockBar(m) {
+  return '';
   if (!isFinished(m)) return '';
   return isLocked(m)
     ? `<div class="lockbar"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Partido terminado: estadísticas protegidas. Los textos se pueden editar.</span><button class="link" data-act="unlock">Desbloquear</button></div>`
@@ -533,7 +538,7 @@ function pitch(m, mode, comp) {
   for (const [slot, [x, y]] of Object.entries(F)) {
     const id = fieldMap[slot]; const p = id && byId[id] && m.called[id] ? byId[id] : null;
     const pos = `style="left:${x}%;top:${100 - y}%"`;
-    if (!p) { html += `<button class="tok empty" ${pos} data-act="${mode === 'live' ? 'noop' : 'slot'}" data-slot="${slot}"><span class="disc">${slot}</span><span class="nm">${mode === 'live' ? '—' : 'Elegir'}</span></button>`; continue; }
+    if (!p) { html += `<button class="tok empty" ${pos} data-act="${mode === 'live' ? 'liveSlot' : 'slot'}" data-slot="${slot}"><span class="disc">${slot}</span><span class="nm">${mode === 'live' ? 'Libre' : 'Elegir'}</span></button>`; continue; }
     const c = comp && comp.P[id];
     const badges = (m.captain === id ? '<i class="cap">C</i>' : '') + (c && c.y ? `<i class="yc">${c.y > 1 ? 2 : ''}</i>` : '') + (c && c.g ? `<i class="gl">${c.g > 1 ? c.g : ''}${IC.ball}</i>` : '');
     html += `<button class="tok" ${pos} data-act="${mode === 'live' ? 'livePlayer' : 'slot'}" data-slot="${slot}" data-id="${esc(id)}">
@@ -611,9 +616,9 @@ function liveView(m) {
     ${nTit < 11 ? `<div class="banner">Faltan titulares (${nTit}/11). Puedes completarlo en <button class="link" data-act="step" data-v="once">Once</button>.</div>` : ''}
     ${imported ? `<div class="banner">Este partido ya estaba en el Excel. Si apuntas un gol nuevo, el marcador se recalcula solo con los goles apuntados aquí.</div>` : ''}
     <div class="quick"><button class="btn goal" data-act="goalStart">${IC.ball} Gol nuestro</button><button class="btn rgoal" data-act="rgoalStart">${IC.ball} Gol rival</button><button class="btn" data-act="rcardStart">${IC.card('Y')} Tarjeta rival</button></div>
-    ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
+    ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale${Object.keys(comp.field).length < 11 ? ' o un hueco libre' : ''}</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
     <div class="${UI.pickIn ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
-    <div class="formline"><span class="muted small">Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
+    <div class="formline"><span class="muted small">${Object.keys(comp.field).length < 11 && m.clock.phase !== 'pre' ? `<b class="short">${Object.keys(comp.field).length} en el campo</b> · ` : ''}Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
     <h3 class="h3">Banquillo <span class="muted small">toca una y luego a quién sustituye</span></h3>
     <div class="benchrow">${bench.map(p => { const c = comp.P[p.id]; const dis = c.expelled;
       return `<button class="bchip ${dis ? 'dim' : ''} ${UI.pickIn === p.id ? 'sel' : ''}" data-act="${dis ? 'noop' : 'benchIn'}" data-id="${esc(p.id)}"><span class="disc sm">${esc(p.dorsal)}</span><span class="bn">${esc(short(p.name))}<small>${c.min ? `${c.min}' jugados` : 'sin jugar'}${c.leftAt != null && !c.expelled ? ` · fuera desde el ${c.leftAt}'` : ''}</small></span>${c.expelled ? IC.card('R') : ''}</button>`; }).join('') || '<span class="muted small">Sin suplentes</span>'}</div>
@@ -632,16 +637,55 @@ function eventText(e, byId) {
   if (e.t === 'card') return `${e.color === 'Y' ? 'Amarilla' : 'Roja'} a ${n(e.pid)}`;
   if (e.t === 'rcard') return `${e.color === 'Y' ? 'Amarilla' : 'Roja'} al ${esc(e.dorsal)} rival`;
   if (e.t === 'sub') return `Entra ${n(e.in)} · sale ${n(e.out)}`;
+  if (e.t === 'out') return `Sale ${n(e.pid)} sin cambio`;
+  if (e.t === 'in') return `Entra ${n(e.pid)} (hueco ${esc(e.slot)})`;
   if (e.t === 'move') return `${n(e.pid)} pasa a la posición ${esc(e.slot)}`;
   return '';
 }
-function eventIcon(e) { return e.t === 'goal' || e.t === 'rgoal' ? IC.ball : e.t === 'card' || e.t === 'rcard' ? IC.card(e.color) : e.t === 'sub' ? IC.sub : IC.move; }
+function eventIcon(e) { return e.t === 'goal' || e.t === 'rgoal' ? IC.ball : e.t === 'card' || e.t === 'rcard' ? IC.card(e.color) : (e.t === 'sub' || e.t === 'out' || e.t === 'in') ? IC.sub : IC.move; }
 function eventLog(m, byId) {
   const evs = sortedEvents(m).reverse();
   if (!evs.length) return '<p class="muted small">Aún no hay nada apuntado. Toca a una jugadora en el campo para apuntar un gol, una tarjeta o un cambio.</p>';
   return `<ol class="log">${evs.map(e => `<li class="ev-${e.t}"><button data-act="evEdit" data-id="${e.id}"><span class="lm">${fmtMin(e.min, e.half, H())}'</span>${eventIcon(e)}<span class="lt">${eventText(e, byId)}${e.desc ? `<small>${esc(e.desc)}</small>` : ''}</span></button></li>`).join('')}</ol>`;
 }
 
+function summaryView(m) {
+  const comp = compute(m, H()); const aw = awayOf(m.title); const sc = scoreStrings(m, comp, aw); const byId = rmap(m);
+  const edit = !!(UI.editStats || {})[m.sheetId];
+  const rows = m.roster.filter(p => m.called[p.id]);
+  const gr = goalRows(m, H());
+  const st = Object.fromEntries(rows.map(p => [p.id, finalStats(m, comp, p.id)]));
+  const v = x => (x === '' || x == null ? '' : esc(x));
+  const cell = (p, f, w = 'n') => edit
+    ? `<td><input class="cin ${f in (m.ov[p.id] || {}) ? 'ovr' : ''} ${w}" data-ov="${esc(p.id)}|${f}" value="${esc(st[p.id][f])}" ${f === 'pos' ? '' : 'inputmode="numeric"'} aria-label="${f}"></td>`
+    : `<td>${v(st[p.id][f])}</td>`;
+  const fin = sc.final ? ourView(sc.final, aw).split('-').map(s => +s) : null;
+  const res = fin ? (fin[0] > fin[1] ? 'w' : fin[0] === fin[1] ? 'd' : 'l') : 'pending';
+  const played = rows.filter(p => st[p.id].tit || st[p.id].min || st[p.id].pos);
+  return `<div class="card result fin-${res}">
+      <div class="finhead"><span class="finbadge"><svg viewBox="0 0 24 24" class="ic"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Jornada finalizada</span><span class="muted small">${esc(fmtFecha(m.info.fecha) || '')}${m.info.lugar ? ' · ' + esc(title(m.info.lugar)) : ''}</span></div>
+      <div class="resrow"><div><small>1ª parte</small><b>${esc(ourView(sc.h1, aw) || '—')}</b></div><div><small>2ª parte</small><b>${esc(ourView(sc.h2, aw) || '—')}</b></div><div class="fin"><small>Final</small><b>${esc(ourView(sc.final, aw) || '—')}</b></div></div>
+      <p class="muted small">Nosotras – ${esc(title(sheetShort(m.title).name))}${m.formationText || m.formation ? ' · sistema ' + esc(m.formationText || m.formation) : ''}${m.rival.formation ? ' · rival ' + esc(m.rival.formation) : ''}</p>
+    </div>
+    ${edit ? `<div class="lockbar open"><span>Editando estadísticas: los cambios se escriben en el Excel al guardar.</span><button class="link" data-act="editStatsOff">Hecho</button></div>`
+           : `<div class="acts"><button class="btn" data-act="askEditStats">Cambiar estadísticas</button></div>`}
+    <h3 class="h3">Jugadoras</h3>
+    <div class="tablewrap"><table class="review"><thead><tr><th>Jugadora</th><th>T/S</th><th>Min</th><th>Pos</th><th>G</th><th>A</th><th>GP</th><th>TA</th><th>TR</th></tr></thead><tbody>
+      ${rows.map(p => `<tr><th><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}${st[p.id].cap ? ' <i class="cap inl">C</i>' : ''}${st[p.id].mvp ? ' <i class="mvpi">MVP</i>' : ''}</th>
+        <td>${st[p.id].tit ? '<b class="pillT">T</b>' : '<b class="pillS">S</b>'}</td>${cell(p, 'min')}${cell(p, 'pos', 'w')}${cell(p, 'g')}${cell(p, 'a')}${cell(p, 'gp')}${cell(p, 'ta')}${cell(p, 'tr')}</tr>`).join('')}
+    </tbody></table></div>
+    ${edit ? `<h3 class="h3">MVP</h3><div class="chips">${(played.length ? played : rows).map(p => `<button class="chip ${m.mvp[p.id] ? 'on' : ''}" data-act="mvp" data-id="${esc(p.id)}">${m.mvp[p.id] ? IC.star : ''}${esc(title(p.name))}</button>`).join('')}</div>
+      <h3 class="h3">Capitana</h3><div class="chips">${rows.map(p => `<button class="chip ${m.captain === p.id ? 'on' : ''}" data-act="setCapSum" data-id="${esc(p.id)}">${esc(title(p.name))}</button>`).join('')}</div>` : ''}
+    <div class="card"><div class="eyebrow">Goles</div>
+      ${gr.ours.length || gr.theirs.length ? `<ul class="glist">${gr.ours.map(r => `<li class="us"><b>${esc(r[0])}'</b><span>${esc(rows.find(p => str(p.dorsal) === str(r[1]))?.name ? title(rows.find(p => str(p.dorsal) === str(r[1])).name) : (r[1] ? '#' + r[1] : 'Gol'))}</span><small>${esc(r[2] || '')}</small></li>`).join('')}${gr.theirs.map(r => `<li class="them"><b>${esc(r[0])}'</b><span>Rival${r[1] ? ' #' + esc(r[1]) : ''}</span><small>${esc(r[2] || '')}</small></li>`).join('')}</ul>` : '<p class="muted small">Sin goles apuntados.</p>'}</div>
+    ${m.rival.players.length ? `<div class="card scout"><div class="eyebrow">Rival · jugadoras destacadas</div><ul class="scoutlist">${m.rival.players.map(p => `<li><span class="disc sm">${esc(p.dorsal)}</span><b>${esc(title(p.name))}</b> <small>${esc(p.pos)}</small> ${p.goals ? `<small>${p.goals} gol</small>` : ''} ${fmtCards(p.y, p.r) ? `<small>${fmtCards(p.y, p.r)}</small>` : ''} <em>${esc(p.note)}</em></li>`).join('')}</ul></div>` : ''}
+    <div class="card">${field('Planteamiento del partido', `<textarea data-bind="texts.plan" rows="4">${esc(m.texts.plan)}</textarea>`)}
+      ${field('Crónica 1ª parte', `<textarea data-bind="texts.cron1" rows="5">${esc(m.texts.cron1)}</textarea>`)}
+      ${field('Crónica 2ª parte', `<textarea data-bind="texts.cron2" rows="5">${esc(m.texts.cron2)}</textarea>`)}
+      ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}</div>
+    <button class="btn primary wide big" data-act="save" ${UI.sync === 'saving' ? 'disabled' : ''}>${UI.sync === 'saving' ? esc(UI.syncMsg) : 'Guardar en el Excel'}</button>
+    <button class="link" data-act="askReopen">Reabrir la jornada (convocatoria, once y directo)</button>`;
+}
 function cierreView(m) {
   const comp = compute(m, H());
   const aw = awayOf(m.title);
@@ -667,8 +711,10 @@ function cierreView(m) {
         <td>${st.tit ? '<b class="pillT">T</b>' : '<b class="pillS">S</b>'}</td>${cell(p, st, 'min')}${cell(p, st, 'pos', 'w')}${cell(p, st, 'g')}${cell(p, st, 'a')}${cell(p, st, 'gp')}${cell(p, st, 'ta')}${cell(p, st, 'tr')}</tr>`; }).join('')}
     </tbody></table></div>
     ${hasOv ? `<button class="link" data-act="clearOv">Quitar correcciones y recalcular todo desde el directo</button>` : ''}
-    <button class="btn primary wide big" data-act="save" ${UI.sync === 'saving' ? 'disabled' : ''}>${UI.sync === 'saving' ? esc(UI.syncMsg) : 'Guardar en el Excel'}</button>
-    <p class="muted small center">${m.savedAt ? `Último guardado ${timeAgo(m.savedAt)}.` : 'Aún no se ha guardado esta jornada desde la app.'} Se escriben ${esc(m.title)}: datos, jugadoras, rival, sistemas, crónicas y goles.</p>
+    ${m.clock.phase === 'end' ? `<button class="btn primary wide big" data-act="finalize" ${UI.sync === 'saving' ? 'disabled' : ''}>Finalizar jornada y guardar</button>
+    <button class="btn wide" data-act="save" ${UI.sync === 'saving' ? 'disabled' : ''}>${UI.sync === 'saving' ? esc(UI.syncMsg) : 'Solo guardar en el Excel'}</button>`
+    : `<button class="btn primary wide big" data-act="save" ${UI.sync === 'saving' ? 'disabled' : ''}>${UI.sync === 'saving' ? esc(UI.syncMsg) : 'Guardar en el Excel'}</button>`}
+    <p class="muted small center">${m.clock.phase === 'end' ? 'Al finalizar, la jornada queda cerrada: solo verás el resumen y podrás añadir textos. ' : ''}${m.savedAt ? `Último guardado ${timeAgo(m.savedAt)}.` : 'Aún no se ha guardado esta jornada desde la app.'} Se escriben ${esc(m.title)}: datos, jugadoras, rival, sistemas, crónicas y goles.</p>
     <button class="link" data-act="askReload">Descartar lo de este móvil y volver a cargar desde el Excel</button>`;
 }
 
@@ -838,6 +884,12 @@ function renderSheet() {
         + (free.length ? plist(m, free, 'pickSlot') : '<p class="muted small">No quedan convocadas libres.</p>');
       break;
     }
+    case 'enter': {
+      const bench = m.roster.filter(p => m.called[p.id] && !onField.includes(p.id) && !comp.P[p.id].expelled).map(p => p.id);
+      h = `Hueco ${s.slot} libre · ¿quién entra?`;
+      body = (m.clock.phase === 'pre' ? '' : minuteField(s)) + (bench.length ? plist(m, bench, 'enterPick') : '<p class="muted small">No hay nadie disponible en el banquillo.</p>');
+      break;
+    }
     case 'player': {
       const c = comp.P[s.pid];
       h = `${n(s.pid)} <small>${c ? c.min + "' jugados" : ''}</small>`;
@@ -846,6 +898,7 @@ function renderSheet() {
         <button class="btn" data-act="cardFrom" data-v="Y">${IC.card('Y')} Amarilla</button>
         <button class="btn" data-act="cardFrom" data-v="R">${IC.card('R')} Roja</button>
         <button class="btn" data-act="subFrom">${IC.sub} Cambio</button>
+        <button class="btn" data-act="outFrom">${IC.sub} Sale sin cambio</button>
         <button class="btn" data-act="moveFrom">${IC.move} Cambiar posición</button>
         <button class="btn" data-act="ogFrom">${IC.ball} Gol en propia</button>
         <button class="btn ${m.captain === s.pid ? 'on' : ''}" data-act="setCap" data-id="${esc(s.pid)}">${IC.star} Capitana</button></div>`;
@@ -922,7 +975,7 @@ const ACT = {
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; persist(); render(); window.scrollTo(0, 0); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
-  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } UI.unlocked = {}; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } UI.unlocked = {}; UI.editStats = {}; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   railToggle() { S.ui.railOpen = !S.ui.railOpen; persist(); render(); if (S.ui.railOpen) { const c = document.getElementById('j' + S.current); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); } },
   reloadJ() { openMatch(S.current, { reload: true }); },
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
@@ -931,6 +984,13 @@ const ACT = {
   doWipe() { const keep = S.settings; S = defaultState(); S.settings = keep; closeSheet(); persist(); render(); if (ready()) openMatch(S.sheets[0].id); },
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
+  finalize() { const m = cur(); m.finalized = true; if (UI.editStats) delete UI.editStats[m.sheetId]; touch(m); window.scrollTo(0, 0); saveToSheet(m); },
+  askEditStats() { openSheet({ type: 'confirm', title: 'Cambiar estadísticas', text: 'Estás a punto de cambiar las estadísticas de un partido finalizado (minutos, goles, tarjetas, MVP…). ¿Seguro?', ok: 'Sí, cambiar', act: 'editStatsOn' }); },
+  editStatsOn() { const m = cur(); (UI.editStats = UI.editStats || {})[m.sheetId] = true; closeSheet(); render(); },
+  editStatsOff() { const m = cur(); if (UI.editStats) delete UI.editStats[m.sheetId]; render(); },
+  setCapSum(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; touch(m); },
+  askReopen() { openSheet({ type: 'confirm', title: 'Reabrir la jornada', text: 'Volverás a tener la convocatoria, el once, el directo y el cierre como en una jornada sin terminar. Lo apuntado no se borra. Cuando acabes, vuelve a pulsar «Finalizar jornada».', ok: 'Reabrir', act: 'doReopen' }); },
+  doReopen() { const m = cur(); m.finalized = false; S.ui.step = 'cierre'; closeSheet(); touch(m); },
   unlock() { UI.pendingAct = null; openSheet({ type: 'confirm', title: 'Desbloquear estadísticas', text: 'Este partido ya terminó. Al desbloquear podrás cambiar convocatoria, minutos, goles, tarjetas y MVP; los cambios se escriben en el Excel cuando guardes.', ok: 'Desbloquear', act: 'unlockGo' }); },
   unlockGo() {
     const m = cur(); (UI.unlocked = UI.unlocked || {})[m.sheetId] = true;
@@ -1017,6 +1077,24 @@ const ACT = {
     openSheet({ type: 'player', pid: out });
   },
   liveSide(el) { S.ui.liveSide = el.dataset.v; persist(); render(); },
+  outFrom() {
+    const m = cur(); const pid = UI.sheet.pid; closeSheet();
+    addEvent(m, { t: 'out', pid, ...nowMinute(m) });
+    const ev = m.events[m.events.length - 1];
+    showToast(`Sale ${title(rmap(m)[pid].name)} sin cambio (${fmtMin(ev.min, ev.half, H())}'). Quedáis ${Object.keys(compute(m, H()).field).length}.`, ev.id);
+  },
+  liveSlot(el) {
+    const m = cur(); const slot = +el.dataset.slot;
+    if (UI.pickIn) {
+      const pid = UI.pickIn; UI.pickIn = null;
+      if (m.clock.phase === 'pre') { m.lineup[slot] = pid; return touch(m); }
+      addEvent(m, { t: 'in', pid, slot, ...nowMinute(m) });
+      const ev = m.events[m.events.length - 1];
+      return showToast(`Entra ${title(rmap(m)[pid].name)} al hueco ${slot} (${fmtMin(ev.min, ev.half, H())}')`, ev.id);
+    }
+    openSheet({ type: 'enter', slot, ...nowMinute(m) });
+  },
+  enterPick(el) { const m = cur(); const s = UI.sheet; closeSheet(); if (m.clock.phase === 'pre') { m.lineup[s.slot] = el.dataset.id; return touch(m); } addEvent(m, { t: 'in', pid: el.dataset.id, slot: s.slot, min: +s.min || 1, half: s.half }); },
   pickCancel() { UI.pickIn = null; render(); },
   undoToast() { const m = cur(); const t = UI.toast; UI.toast = null; if (t && t.undo) removeEvent(m, t.undo); else render(); },
   goalStart() { const m = cur(); openSheet({ type: 'goal', step: 'scorer', ...nowMinute(m) }); },
