@@ -303,3 +303,7 @@ nav.bottom button.on .ic { color: var(--accent); }
 #toast.show { display: flex; }
 #toast span { flex: 1; }
 #toast button { color: var(--yellow); font-weight: 800; padding: 6px 4px; }
+
+.locked { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--good) 10%, var(--card)); border: 1.5px solid color-mix(in srgb, var(--good) 35%, var(--line)); }
+.locked b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.locked .ic { color: var(--good); }

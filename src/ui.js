@@ -83,7 +83,7 @@ async function gfetch(path, opts = {}) {
 }
 const enc = encodeURIComponent;
 const TOOLS = {
-  get_spreadsheet: () => gfetch(`${sid()}?fields=${enc('sheets.properties(sheetId,title,hidden,gridProperties)')}`),
+  get_spreadsheet: () => gfetch(`${sid()}?fields=${enc('properties.title,sheets.properties(sheetId,title,hidden,gridProperties)')}`),
   get_values: i => gfetch(`${sid()}/values/${enc(i.range)}`),
   batch_get: i => gfetch(`${sid()}/values:batchGet?${i.ranges.map(r => 'ranges=' + enc(r)).join('&')}`),
   update_values: i => gfetch(`${sid()}/values/${enc(i.range)}?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: i.values }) }),
@@ -159,7 +159,9 @@ async function refreshSheets() {
   try {
     const p = await call('get_spreadsheet', {}, { read: true });
     const list = (p && p.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title })).filter(s => /^\s*\d+\s*-/.test(s.title));
-    if (list.length) { S.sheets = list; persist(); }
+    if (list.length) { S.sheets = list; }
+    if (p && p.properties) S.settings.sheetTitle = p.properties.title;
+    persist();
     UI.err.sheets = null;
   } catch (e) { UI.err.sheets = errText(e); }
   render();
@@ -759,9 +761,12 @@ function scoutView() {
 
 function settingsView() {
   return `<section class="pad"><div class="card">
-    ${field('Google Sheet (enlace o ID)', inp('@settings.sid', S.settings.sid))}
+    ${S.settings.sid && !UI.editSid
+      ? `<div class="fld"><span>Google Sheet</span><div class="locked"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><b>${esc(S.settings.sheetTitle || 'Excel conectado')}</b><button class="link" data-act="askEditSid">Cambiar</button></div></div>`
+      : field('Google Sheet (pega el enlace)', `<input id="sidInput" value="" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off"><div class="acts"><button class="btn primary" data-act="saveSid">Conectar este Excel</button>${S.settings.sid ? '<button class="btn ghost" data-act="cancelSid">Cancelar</button>' : ''}</div>`)}
+    ${UI.err.sid ? `<div class="banner err">${esc(UI.err.sid)}</div>` : ''}
     ${field('Duración de cada parte', `<select data-bind="@settings.half">${[35, 40, 45].map(n => `<option value="${n}" ${+S.settings.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
-    ${field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
+    ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
     <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
     <p class="muted small">Conexión: ${ready() ? `conectada con tu cuenta de Google (la sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; luego se renueva al guardar)` : 'sin sesión'}${UI.err.sheets ? ' · ' + esc(UI.err.sheets) : ''}</p></div>
     <div class="card"><h3 class="h3">Cómo se rellena el Excel</h3>
@@ -897,6 +902,21 @@ const ACT = {
   doWipe() { const keep = S.settings; S = defaultState(); S.settings = keep; closeSheet(); persist(); render(); if (ready()) openMatch(S.sheets[0].id); },
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
+  askEditSid() { openSheet({ type: 'confirm', title: 'Cambiar el Excel', text: 'Solo hace falta si vas a usar otro Google Sheet. El actual seguirá conectado hasta que pegues uno nuevo que funcione.', ok: 'Cambiar', act: 'doEditSid' }); },
+  doEditSid() { closeSheet(); UI.editSid = true; UI.err.sid = null; render(); },
+  cancelSid() { UI.editSid = false; UI.err.sid = null; render(); },
+  async saveSid() {
+    const v = str($('#sidInput').value); if (!v) return;
+    const prev = S.settings.sid; S.settings.sid = v;
+    if (!sid()) { S.settings.sid = prev; UI.err.sid = 'Eso no parece un enlace de Google Sheets.'; return render(); }
+    if (!ready()) { persist(); UI.editSid = false; return signIn(''); }
+    try {
+      await call('get_spreadsheet', {}, { read: true });
+      UI.editSid = false; UI.err.sid = null; UI.err.auth = null; S.stats = { v: 2, at: 0, sums: {} };
+      if (prev !== S.settings.sid) S.matches = {};
+      persist(); S.ui.tab = 'match'; initAuth();
+    } catch (e) { S.settings.sid = prev; UI.err.sid = 'No he podido abrir ese Excel: ' + errText(e); render(); }
+  },
   signout() { signOut(); },
   reconnect() { refreshSheets(); },
   statsReload() { loadStats(true); },
