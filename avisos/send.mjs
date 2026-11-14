@@ -46,6 +46,7 @@ const hhmm = t => `${String(Math.floor(((t % 1440) + 1440) % 1440 / 60)).padStar
 const titleCase = s => String(s).toLowerCase().replace(/(^|[\s.'-])(\p{L})/gu, (a, b, c) => b + c.toUpperCase()).replace(/(?<=\s)(De|Del|La|El|Los|Las|Y)(?=\s)/g, w => w.toLowerCase());
 
 async function main() {
+  if (!SA.client_email || !SA.private_key) { console.log('Falta el secreto GOOGLE_SA: los avisos aún no están configurados.'); return; }
   TOKEN = await googleToken();
   const meta = await api('?fields=sheets.properties(sheetId,title)');
   const sheets = meta.sheets.map(s => s.properties);
