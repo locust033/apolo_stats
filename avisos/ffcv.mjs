@@ -7,7 +7,10 @@ const T = '22', C = '905431657', G = '905431660', APOLO = '905446426';
 const BASE = 'https://ffcv.es/competiciones/';
 const MAX_AGE_H = 6;
 const FORCE = process.env.FORCE === '1';
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', Accept: 'application/json, text/plain, */*', Referer: BASE, 'Accept-Language': 'es-ES,es;q=0.9' };
+// Cabeceras como las de un navegador en la propia web (sin ellas, la FFCV bloquea con «Token de página inválido»)
+const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', Accept: '*/*', 'Accept-Language': 'es-ES,es;q=0.9',
+  Referer: 'https://ffcv.es/competiciones/?view=partidos', 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty',
+  'sec-ch-ua': '"Chromium";v="130"', 'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"macOS"' };
 
 async function get(path, tries = 3) {
   for (let i = 0; ; i++) {
