@@ -422,14 +422,15 @@ nav.bottom button.on .ic { color: var(--accent); }
 /* Ficha de jugadora por jornada */
 .jgl { display: grid; gap: 6px; }
 .jg { border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-.jg > summary, .jg.off { list-style: none; display: grid; grid-template-columns: 34px 1fr auto auto; grid-template-areas: "n r res ic" "bar bar bar bar"; align-items: center; column-gap: 8px; row-gap: 6px; padding: 9px 12px; cursor: pointer; }
+.jg > summary, .jg.off { list-style: none; display: grid; grid-template-columns: 34px 1fr auto; grid-template-areas: "n r res" "bar bar bar"; align-items: center; column-gap: 8px; row-gap: 6px; padding: 9px 12px; cursor: pointer; }
 .jg > summary::-webkit-details-marker { display: none; }
 .jg.off { opacity: .55; cursor: default; }
 .jg .jn { grid-area: n; font-family: var(--display); font-weight: 800; font-size: 16px; }
 .jg .jr { grid-area: r; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jg .gres { grid-area: res; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
 .gres.w { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); } .gres.d { background: color-mix(in srgb, #d4a106 22%, transparent); color: #9a7400; } .gres.l { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); }
-.jg .jicons { grid-area: ic; display: inline-flex; gap: 3px; align-items: center; font-size: 15px; }
+.jg .jicons { display: inline-flex; gap: 3px; align-items: center; font-size: 15px; min-width: 0; }
+.jg .jicons:empty { display: none; }
 .jg .ico { position: relative; line-height: 1; }
 .jg .ico sup { font-size: 10px; font-weight: 800; margin-left: 1px; vertical-align: super; }
 .jg .jbar { grid-area: bar; display: flex; align-items: center; gap: 8px; }
@@ -440,8 +441,9 @@ nav.bottom button.on .ic { color: var(--accent); }
 .jg[open] > summary { border-bottom: 1px dashed var(--line); }
 .jdet { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; padding: 10px 12px 12px; font-size: 14px; }
 .jdet dt { color: var(--muted); font-weight: 600; } .jdet dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.poschip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 3px; border-radius: 999px; background: color-mix(in srgb, var(--line) 55%, transparent); font-size: 13px; }
+.poschip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-weight: 700; letter-spacing: .02em; border-radius: 999px; background: color-mix(in srgb, var(--line) 55%, transparent); font-size: 13px; }
 .poschip b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 11.5px; }
+.tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
 
 </style>
 </head>
@@ -2066,7 +2068,8 @@ async function setAvisosKeyApp(key, val) {
 }
 
 // Ficha de una jugadora: una fila desplegable por jornada (barra de minutos + iconos), con el detalle dentro
-const POS_NAME = { 1: 'Portera', 2: 'Lateral derecha', 3: 'Lateral izquierda', 4: 'Central', 5: 'Central', 6: 'Pivote', 7: 'Extremo derecho', 8: 'Interior', 9: 'Delantera centro', 10: 'Mediapunta', 11: 'Extremo izquierdo' };
+// Posiciones según los huecos del sistema habitual (1.4.2.3.1)
+const POS_NAME = { 1: 'POR', 2: 'LD', 3: 'LI', 4: 'DFC', 5: 'DFC', 6: 'MCD', 7: 'ED', 8: 'MCD', 9: 'DC', 10: 'MCO', 11: 'EI' };
 function playerGames(p, A) {
   const full = 2 * H();
   const byN = Object.fromEntries(A.games.map(g => [g.n, g]));
@@ -2079,14 +2082,14 @@ function playerGames(p, A) {
   const res = n => { const s = byN[n]; if (!s || !s.final) return ''; const [a, b] = s.final; const k = a > b ? 'w' : a === b ? 'd' : 'l'; return `<span class="gres ${k}">${a}-${b}</span>`; };
   return `<div class="jgl">${p.games.map(g => {
     const conv = g.conv || g.played;
-    const head = `<span class="jn">J${g.n}</span><span class="jr">${esc(title(g.rival))}</span>${res(g.n)}<span class="jicons">${icons(g)}</span>
-      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b>` : '<em>No convocada</em>'}</span>`;
+    const head = `<span class="jn">J${g.n}</span><span class="jr">${esc(title(g.rival))}</span>${res(g.n)}
+      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b><span class="jicons">${icons(g)}</span>` : '<em>No convocada</em>'}</span>`;
     if (!conv) return `<div class="jg off">${head}</div>`;
     const pos = str(g.pos).split(/\s+/).filter(Boolean);
     const rows = [
       ['Papel', g.tit ? 'Titular' : 'Suplente'],
-      ['Minutos', `${g.min || 0}' de ${full}'`],
-      [pos.length > 1 ? 'Posiciones' : 'Posición', pos.length ? pos.map(x => `<span class="poschip"><b>${esc(x)}</b>${esc(POS_NAME[+x] || '')}</span>`).join('') : '—'],
+      ['Minutos', `${g.min || 0}'`],
+      [pos.length > 1 ? 'Posiciones' : 'Posición', pos.length ? [...new Set(pos.map(x => POS_NAME[+x] || x))].map(x => `<span class="poschip">${esc(x)}</span>`).join('') : '—'],
       g.g ? ['Goles', '⚽'.repeat(Math.min(g.g, 6)) + (g.g > 6 ? ` ×${g.g}` : '')] : null,
       g.a ? ['Asistencias', String(g.a)] : null,
       g.gp ? ['Gol en propia', String(g.gp)] : null,
@@ -2227,7 +2230,10 @@ function renderSheet() {
     case 'pdetail': {
       const A = aggregate(S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean)); const p = A.players.find(x => x.key === s.key); if (!p) { closeSheet(); return; }
       h = `${esc(title(p.name))} <small>#${esc(p.dorsal)}</small>`;
+      const avg = v => (p.pj ? (v / p.pj).toLocaleString('es-ES', { maximumFractionDigits: 2, minimumFractionDigits: v ? 1 : 0 }) : '—');
       body = `<div class="tiles small">${[['Min', p.min], ['Goles', p.g], ['Asist.', p.a], ['MVP', p.mvp]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
+        <div class="tiles small two">${[['Goles por partido', avg(p.g)], ['Tarjetas por partido', avg((p.ta || 0) + (p.tr || 0))]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
+        <p class="muted small">Media sobre ${p.pj === 1 ? '1 partido jugado' : p.pj + ' partidos jugados'}.</p>
         <div class="eyebrow">Por jornada</div>${playerGames(p, A)}`;
       break;
     }

@@ -1249,7 +1249,8 @@ async function setAvisosKeyApp(key, val) {
 }
 
 // Ficha de una jugadora: una fila desplegable por jornada (barra de minutos + iconos), con el detalle dentro
-const POS_NAME = { 1: 'Portera', 2: 'Lateral derecha', 3: 'Lateral izquierda', 4: 'Central', 5: 'Central', 6: 'Pivote', 7: 'Extremo derecho', 8: 'Interior', 9: 'Delantera centro', 10: 'Mediapunta', 11: 'Extremo izquierdo' };
+// Posiciones según los huecos del sistema habitual (1.4.2.3.1)
+const POS_NAME = { 1: 'POR', 2: 'LD', 3: 'LI', 4: 'DFC', 5: 'DFC', 6: 'MCD', 7: 'ED', 8: 'MCD', 9: 'DC', 10: 'MCO', 11: 'EI' };
 function playerGames(p, A) {
   const full = 2 * H();
   const byN = Object.fromEntries(A.games.map(g => [g.n, g]));
@@ -1262,14 +1263,14 @@ function playerGames(p, A) {
   const res = n => { const s = byN[n]; if (!s || !s.final) return ''; const [a, b] = s.final; const k = a > b ? 'w' : a === b ? 'd' : 'l'; return `<span class="gres ${k}">${a}-${b}</span>`; };
   return `<div class="jgl">${p.games.map(g => {
     const conv = g.conv || g.played;
-    const head = `<span class="jn">J${g.n}</span><span class="jr">${esc(title(g.rival))}</span>${res(g.n)}<span class="jicons">${icons(g)}</span>
-      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b>` : '<em>No convocada</em>'}</span>`;
+    const head = `<span class="jn">J${g.n}</span><span class="jr">${esc(title(g.rival))}</span>${res(g.n)}
+      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b><span class="jicons">${icons(g)}</span>` : '<em>No convocada</em>'}</span>`;
     if (!conv) return `<div class="jg off">${head}</div>`;
     const pos = str(g.pos).split(/\s+/).filter(Boolean);
     const rows = [
       ['Papel', g.tit ? 'Titular' : 'Suplente'],
-      ['Minutos', `${g.min || 0}' de ${full}'`],
-      [pos.length > 1 ? 'Posiciones' : 'Posición', pos.length ? pos.map(x => `<span class="poschip"><b>${esc(x)}</b>${esc(POS_NAME[+x] || '')}</span>`).join('') : '—'],
+      ['Minutos', `${g.min || 0}'`],
+      [pos.length > 1 ? 'Posiciones' : 'Posición', pos.length ? [...new Set(pos.map(x => POS_NAME[+x] || x))].map(x => `<span class="poschip">${esc(x)}</span>`).join('') : '—'],
       g.g ? ['Goles', '⚽'.repeat(Math.min(g.g, 6)) + (g.g > 6 ? ` ×${g.g}` : '')] : null,
       g.a ? ['Asistencias', String(g.a)] : null,
       g.gp ? ['Gol en propia', String(g.gp)] : null,
@@ -1410,7 +1411,10 @@ function renderSheet() {
     case 'pdetail': {
       const A = aggregate(S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean)); const p = A.players.find(x => x.key === s.key); if (!p) { closeSheet(); return; }
       h = `${esc(title(p.name))} <small>#${esc(p.dorsal)}</small>`;
+      const avg = v => (p.pj ? (v / p.pj).toLocaleString('es-ES', { maximumFractionDigits: 2, minimumFractionDigits: v ? 1 : 0 }) : '—');
       body = `<div class="tiles small">${[['Min', p.min], ['Goles', p.g], ['Asist.', p.a], ['MVP', p.mvp]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
+        <div class="tiles small two">${[['Goles por partido', avg(p.g)], ['Tarjetas por partido', avg((p.ta || 0) + (p.tr || 0))]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
+        <p class="muted small">Media sobre ${p.pj === 1 ? '1 partido jugado' : p.pj + ' partidos jugados'}.</p>
         <div class="eyebrow">Por jornada</div>${playerGames(p, A)}`;
       break;
     }
