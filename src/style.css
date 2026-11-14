@@ -345,3 +345,11 @@ nav.bottom button.on .ic { color: var(--accent); }
 .glist li.us b { color: var(--good); } .glist li.them b { color: var(--red); }
 .glist li small { color: var(--muted); }
 .short { color: var(--warn); }
+
+.fedinfo { display: grid; gap: 12px; }
+.fedinfo > summary { cursor: pointer; list-style: none; font-family: var(--display); font-weight: 800; font-size: 19px; text-transform: uppercase; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1.5px solid var(--line); }
+.fedinfo > summary::-webkit-details-marker { display: none; }
+.fedinfo > summary::after { content: '▾'; float: right; color: var(--muted); }
+.fedinfo[open] > summary::after { content: '▴'; }
+.fedinfo[open] { gap: 12px; }
+.fedinfo > .card, .fedinfo > .chips { margin-top: 12px; }
