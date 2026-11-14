@@ -891,7 +891,7 @@ function summaryView(m) {
     ${edit ? `<h3 class="h3">MVP</h3><div class="chips">${(played.length ? played : rows).map(p => `<button class="chip ${m.mvp[p.id] ? 'on' : ''}" data-act="mvp" data-id="${esc(p.id)}">${m.mvp[p.id] ? IC.star : ''}${esc(title(p.name))}</button>`).join('')}</div>
       <h3 class="h3">Capitana</h3><div class="chips">${rows.map(p => `<button class="chip ${m.captain === p.id ? 'on' : ''}" data-act="setCapSum" data-id="${esc(p.id)}">${esc(title(p.name))}</button>`).join('')}</div>` : ''}
     <div class="card"><div class="eyebrow">Goles</div>
-      ${gr.ours.length || gr.theirs.length ? `<ul class="glist">${gr.ours.map(r => `<li class="us"><b>${esc(r[0])}'</b><span>${esc(rows.find(p => str(p.dorsal) === str(r[1]))?.name ? title(rows.find(p => str(p.dorsal) === str(r[1])).name) : (r[1] ? '#' + r[1] : 'Gol'))}</span><small>${esc(r[2] || '')}</small></li>`).join('')}${gr.theirs.map(r => `<li class="them"><b>${esc(r[0])}'</b><span>Rival${r[1] ? ' #' + esc(r[1]) : ''}</span><small>${esc(r[2] || '')}</small></li>`).join('')}</ul>` : '<p class="muted small">Sin goles apuntados.</p>'}</div>
+      ${goalListHtml(gr, rows)}</div>
     ${m.rival.players.some(p => !p.fed) ? `<div class="card scout"><div class="eyebrow">Rival · jugadoras destacadas</div><ul class="scoutlist">${m.rival.players.filter(p => !p.fed).map(p => `<li><span class="disc sm">${esc(p.dorsal)}</span><b>${esc(title(p.name))}</b> <small>${esc(p.pos)}</small> ${p.goals ? `<small>${p.goals} gol</small>` : ''} ${fmtCards(p.y, p.r) ? `<small>${fmtCards(p.y, p.r)}</small>` : ''} <em>${esc(p.note)}</em></li>`).join('')}</ul></div>` : ''}
     <div class="card">${field('Planteamiento del partido', `<textarea data-bind="texts.plan" rows="4">${esc(m.texts.plan)}</textarea>`)}
       ${field('Crónica 1ª parte', `<textarea data-bind="texts.cron1" rows="5">${esc(m.texts.cron1)}</textarea>`)}
@@ -910,6 +910,23 @@ function valsCard(m) {
     ${VAL_FIELDS.map(([k, , label]) => `<div class="valrow"><div class="vlab"><span>${esc(label)}</span><b>${esc(str(v[k])) || '—'}</b></div>
       <div class="vnums">${Array.from({ length: 10 }, (_, i) => i + 1).map(n => `<button class="vn ${str(v[k]) === String(n) ? 'on' : ''}" data-act="setVal" data-k="${k}" data-n="${n}" aria-label="${esc(label)} ${n}">${n}</button>`).join('')}</div></div>`).join('')}
   </div>`;
+}
+// Goles en orden de minuto, con una línea discontinua entre la 1ª y la 2ª parte
+function goalHalfKey(min) {
+  const t = str(min).replace(/'/g, ''); const mm = t.match(/^(\d+)(?:\s*\+\s*(\d+))?/); if (!mm) return [2, 9999];
+  const base = +mm[1], extra = +(mm[2] || 0);
+  return [base <= H() ? 1 : 2, base + extra / 100];
+}
+function goalListHtml(gr, rows) {
+  if (!gr.ours.length && !gr.theirs.length) return '<p class="muted small">Sin goles apuntados.</p>';
+  const name = r => { const p = rows.find(p => str(p.dorsal) === str(r[1])); return p ? title(p.name) : (r[1] ? '#' + r[1] : 'Gol'); };
+  const all = [...gr.ours.map((r, i) => ({ r, us: true, i })), ...gr.theirs.map((r, i) => ({ r, us: false, i }))]
+    .map(g => ({ ...g, k: goalHalfKey(g.r[0]) })).sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || (a.us === b.us ? a.i - b.i : 0));
+  const li = g => g.us ? `<li class="us"><b>${esc(g.r[0])}'</b><span>${esc(name(g.r))}</span><small>${esc(g.r[2] || '')}</small></li>`
+    : `<li class="them"><b>${esc(g.r[0])}'</b><span>Rival${g.r[1] ? ' #' + esc(g.r[1]) : ''}</span><small>${esc(g.r[2] || '')}</small></li>`;
+  const h1 = all.filter(g => g.k[0] === 1), h2 = all.filter(g => g.k[0] === 2);
+  const empty = t => `<li class="gnone">${t}</li>`;
+  return `<ul class="glist">${h1.length ? h1.map(li).join('') : empty('Sin goles en la 1ª parte')}<li class="ghalf" aria-hidden="true"><span>Descanso</span></li>${h2.length ? h2.map(li).join('') : empty('Sin goles en la 2ª parte')}</ul>`;
 }
 function cierreView(m) {
   const comp = compute(m, H());
