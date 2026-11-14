@@ -396,3 +396,6 @@ nav.bottom button.on .ic { color: var(--accent); }
 .tok.dragsrc { opacity: .3; }
 .livepitch.dragging .tok .disc { animation: none; }
 .tok.dropover .disc { transform: scale(1.18); box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--accent) !important; transition: transform .12s; }
+.avisos .tgl { display: flex; gap: 10px; align-items: center; padding: 8px 0; font-weight: 600; font-size: 14.5px; }
+.avisos .tgl input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.avisos .ok { color: var(--good); }

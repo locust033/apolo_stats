@@ -1,0 +1,30 @@
+name: Avisos Apolo
+# Cada 10 minutos mira el Excel y manda los avisos al móvil (martes de horarios y día de partido).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: avisos
+jobs:
+  avisos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save --no-audit --no-fund web-push@3
+      - run: node avisos/send.mjs
+        env:
+          GOOGLE_SA: ${{ secrets.GOOGLE_SA }}
+          SHEET_ID: 1NIOy0FJE7ZojeUCjoY0qkNdH0_nSJNEnHTcigUdzGY0
+      # GitHub para las tareas programadas de repositorios sin cambios en 60 días: un commit vacío al mes lo evita
+      - name: Mantener activo
+        run: |
+          last=$(git log -1 --format=%ct); now=$(date +%s)
+          if [ $(( (now - last) / 86400 )) -ge 40 ]; then
+            git config user.name "apolo-avisos"; git config user.email "apolo-avisos@users.noreply.github.com"
+            git commit --allow-empty -m "Mantener activos los avisos" && git push
+          fi

@@ -187,6 +187,7 @@ async function importFfcvIfPending() {
 }
 
 async function initAuth() {
+  { const j0 = new URLSearchParams(location.search).get('j'); if (j0) try { sessionStorage.setItem('apolo-j', j0); } catch (e) {} }
   loadAuth(); captureRedirect(); loadFfcvCache();
   if (pendingInteractive) { const st = pendingInteractive; pendingInteractive = null; return signIn(st, { silent: false }); }
   // token caducado (dura 1 h): se renueva solo, sin pantalla de Google
@@ -202,7 +203,9 @@ async function initAuth() {
   await loadStats(true);
   await loadFfcv();
   await importFfcvIfPending();
-  pickStartJornada();
+  let jq = null; try { jq = sessionStorage.getItem('apolo-j'); sessionStorage.removeItem('apolo-j'); } catch (e) {}
+  if (location.search) history.replaceState(null, '', location.pathname);
+  if (jq && sheetById(jq)) { S.current = +jq; S.ui.tab = 'match'; } else pickStartJornada();
   const m = cur();
   // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
   await openMatch(S.current ?? S.sheets[0].id, { reload: !(m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) });
@@ -1154,6 +1157,7 @@ function settingsView() {
     ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
     <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
     <p class="muted small">Conexión: ${ready() ? `conectada con tu cuenta de Google (la sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; luego se renueva al guardar)` : 'sin sesión'}${UI.err.sheets ? ' · ' + esc(UI.err.sheets) : ''}</p></div>
+    ${avisosCard()}
     <div class="card"><h3 class="h3">Cómo se rellena el Excel</h3>
     <ul class="howto"><li><b>TITULAR</b>: en el once inicial. <b>SUPLENTE</b>: convocada que empieza en el banquillo.</li>
     <li><b>MINUTOS</b>: se calculan con los cambios, rojas y el reloj (partes de ${H()}').</li>
@@ -1162,6 +1166,63 @@ function settingsView() {
     <li><b>GP</b>: goles en propia puerta. <b>CAP</b>: columna nueva que se crea al guardar cada jornada.</li>
     <li>Las jugadoras de otro equipo se añaden en una fila nueva bajo la última jugadora, con el mismo formato.</li></ul></div>
     <button class="link danger" data-act="askWipe">Borrar todos los datos guardados en este móvil</button></section>`;
+}
+
+// ===== AVISOS (notificaciones push) =====
+// La app guarda en la pestaña oculta «AVISOS» del Excel la configuración y la suscripción de este móvil.
+// Un proceso en GitHub (cada 10 min) lee el Excel y manda los avisos: martes de horarios y día de partido.
+const AV = { loaded: false, cfg: { martes: '10:00', antes: '2', partido: '1' }, rows: [], subscribed: null, busy: false, msg: '' };
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const b64uEnc = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+const b64uDec = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+async function avisosEnsureSheet() {
+  const meta = await call('get_spreadsheet', {}, { read: true });
+  if (!(meta.sheets || []).some(x => x.properties.title === 'AVISOS'))
+    await call('update_spreadsheet', { requests: [{ addSheet: { properties: { title: 'AVISOS', hidden: true, gridProperties: { rowCount: 600, columnCount: 4 } } } }] });
+}
+async function avisosLoad() {
+  try {
+    const p = await call('get_values', { range: `'AVISOS'!A1:D500` }, { read: true });
+    AV.rows = (p.values || []).map(r => r.slice());
+    for (const r of AV.rows) if (['martes', 'antes', 'partido', 'vapid_public'].includes(r[0])) AV.cfg[r[0]] = r[1] ?? '';
+  } catch (e) { AV.rows = []; }
+  AV.loaded = true;
+  try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); AV.subscribed = !!sub && AV.rows.some(r => r[0] === 'sub' && str(r[1]).includes(sub.endpoint)); } catch (e) { AV.subscribed = false; }
+  render();
+}
+function avSet(key, val) { const r = AV.rows.find(x => x[0] === key); if (r) r[1] = val; else AV.rows.unshift([key, val]); }
+async function avisosWrite() {
+  await avisosEnsureSheet();
+  const rows = AV.rows.filter(r => r && r[0]);
+  await call('clear_values', { range: `'AVISOS'!A1:D600` });
+  if (rows.length) await writeVals(`'AVISOS'!A1:D${rows.length}`, rows.map(r => [r[0] ?? '', r[1] ?? '', r[2] ?? '', r[3] ?? '']));
+}
+function avisosCard() {
+  if (ready() && !AV.loaded && !AV.loading) { AV.loading = true; avisosLoad(); }
+  const c = AV.cfg;
+  const state = !pushSupported() ? '<p class="muted small">Este navegador no admite avisos. En el iPhone hacen falta iOS 16.4 o posterior y abrir la app desde el icono de la pantalla de inicio.</p>'
+    : !isStandalone() ? '<p class="muted small">Para recibir avisos, abre la app desde su icono en la pantalla de inicio (no desde Safari).</p>'
+    : Notification.permission === 'denied' ? '<p class="muted small">Los avisos están bloqueados para esta app. Actívalos en Ajustes del iPhone › Notificaciones › Apolo.</p>'
+    : AV.subscribed ? '<p class="ok small"><b>Avisos activados en este móvil.</b></p>' : '';
+  const tSel = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '17:00', '18:00', '19:00', '20:00'];
+  return `<div class="card avisos"><h3 class="h3">Avisos</h3>
+    <label class="tgl"><input type="checkbox" data-av="martesOn" ${c.martes ? 'checked' : ''}><span>Recordatorio los martes para actualizar horarios</span></label>
+    ${c.martes ? field('Hora del recordatorio', `<select data-av="martes">${tSel.map(t => `<option ${c.martes === t ? 'selected' : ''}>${t}</option>`).join('')}</select>`) : ''}
+    <label class="tgl"><input type="checkbox" data-av="partido" ${c.partido !== '0' ? 'checked' : ''}><span>Día de partido: aviso antes de la citación</span></label>
+    ${c.partido !== '0' ? field('Cuánto antes de la citación', `<select data-av="antes">${['1', '1.5', '2', '3', '4'].map(h => `<option value="${h}" ${String(c.antes) === h ? 'selected' : ''}>${h.replace('.5', ' h 30')}${h.includes('.') ? '' : ' h'}</option>`).join('')}</select>`) : ''}
+    ${state}
+    <div class="acts">${pushSupported() && isStandalone() && Notification.permission !== 'denied' && !AV.subscribed
+      ? `<button class="btn primary" data-act="avEnable" ${AV.busy || !ready() ? 'disabled' : ''}>Activar avisos en este móvil</button>` : ''}
+      ${AV.subscribed ? `<button class="btn" data-act="avTest">Probar</button><button class="btn ghost" data-act="avDisable">Desactivar en este móvil</button>` : ''}</div>
+    ${AV.msg ? `<p class="muted small">${esc(AV.msg)}</p>` : ''}
+    <p class="muted small">Los avisos llegan aunque la app esté cerrada. La hora y la citación se leen del Excel, así que si cambias la hora del partido, el aviso se ajusta solo. Pueden llegar con unos minutos de margen.</p></div>`;
+}
+async function avisosSaveCfg(msg) {
+  AV.busy = true; render();
+  try { avSet('martes', AV.cfg.martes || ''); avSet('antes', String(AV.cfg.antes || '2')); avSet('partido', AV.cfg.partido === '0' ? '0' : '1'); await avisosWrite(); AV.msg = msg || 'Guardado.'; }
+  catch (e) { AV.msg = 'No se pudo guardar: ' + errText(e); }
+  AV.busy = false; render();
 }
 
 // ===== HOJA INFERIOR (diálogos) =====
@@ -1389,6 +1450,39 @@ const ACT = {
   },
   rpEdit(el) { UI.rpEdit = +el.dataset.i; render(); },
   rpDone() { UI.rpEdit = null; render(); },
+  avEnable() {
+    if (!ready()) return signIn('');
+    const perm = Notification.requestPermission(); // tiene que ir lo primero, en el mismo toque
+    AV.busy = true; AV.msg = 'Activando…'; render();
+    (async () => {
+      try {
+        if (await perm !== 'granted') { AV.msg = 'No has dado permiso para los avisos.'; return; }
+        await avisosLoad();
+        let pub = AV.cfg.vapid_public, priv = (AV.rows.find(r => r[0] === 'vapid_private') || [])[1];
+        if (!pub || !priv) { // claves propias de los avisos, generadas en el móvil y guardadas en tu Excel
+          const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+          pub = b64uEnc(await crypto.subtle.exportKey('raw', kp.publicKey)); priv = (await crypto.subtle.exportKey('jwk', kp.privateKey)).d;
+          avSet('vapid_public', pub); avSet('vapid_private', priv); AV.cfg.vapid_public = pub;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (sub) { try { await sub.unsubscribe(); } catch (e) {} }
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uDec(pub) });
+        const json = JSON.stringify(sub.toJSON());
+        AV.rows = AV.rows.filter(r => !(r[0] === 'sub' && str(r[1]).includes(sub.endpoint)));
+        AV.rows.push(['sub', json, /iphone|ipad/i.test(navigator.userAgent) ? 'iPhone' : 'Móvil', new Date().toISOString()]);
+        await avisosSaveCfg('Listo. En unos minutos te llegará un aviso de «Avisos activados».');
+        AV.subscribed = true;
+      } catch (e) { AV.msg = 'No se pudieron activar: ' + (e.code ? errText(e) : (e.message || e)); }
+      finally { AV.busy = false; render(); }
+    })();
+  },
+  async avDisable() {
+    try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription();
+      if (sub) { AV.rows = AV.rows.filter(r => !(r[0] === 'sub' && str(r[1]).includes(sub.endpoint))); await sub.unsubscribe(); }
+      AV.subscribed = false; await avisosSaveCfg('Avisos desactivados en este móvil.'); } catch (e) { AV.msg = errText(e); render(); }
+  },
+  async avTest() { try { const reg = await navigator.serviceWorker.ready; await reg.showNotification('Apolo', { body: 'Así se verán los avisos.', icon: 'icons/icon-192.png', tag: 'test' }); } catch (e) { AV.msg = String(e.message || e); render(); } },
   rpTag(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.tag = p.tag ? '' : 'Goleadora'; p.fed = false; touch(m); },
   rpPos(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.pos = p.pos === el.dataset.v ? '' : el.dataset.v; p.fed = false; touch(m); },
   rpAdd() { const m = cur(); m.rival.players.push({ name: '', dorsal: '', pos: '', goals: 0, y: 0, r: 0, tag: '', info: '', note: '', fed: false }); UI.rpEdit = m.rival.players.length - 1; touch(m); },
@@ -1526,6 +1620,14 @@ document.addEventListener('click', ev => {
   f(el, ev);
 });
 document.addEventListener('focusin', ev => { if (ev.target.dataset && ev.target.dataset.locked) { ev.target.blur(); ACT.unlock(); } });
+document.addEventListener('change', ev => {
+  const el = ev.target; const k = el.dataset && el.dataset.av; if (!k) return;
+  if (k === 'martesOn') AV.cfg.martes = el.checked ? (AV.cfg.martes || '10:00') : '';
+  else if (k === 'partido') AV.cfg.partido = el.checked ? '1' : '0';
+  else AV.cfg[k] = el.value;
+  if (k === 'martesOn' && el.checked && !AV.cfg.martes) AV.cfg.martes = '10:00';
+  avisosSaveCfg();
+});
 document.addEventListener('input', ev => {
   const el = ev.target;
   if (el.dataset.bind) {
