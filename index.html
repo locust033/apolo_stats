@@ -664,7 +664,7 @@ const short = n => { const p = String(n).split(/\s+/); return p.length > 1 ? p[0
 const title = s => { const t = String(s).toLowerCase(); return t.replace(/(^|[\s.'-])(\p{L})/gu, (a, b, c) => b + c.toUpperCase()); };
 
 // ===== GOOGLE: inicio de sesión en el navegador + API de Google Sheets =====
-const CLIENT_ID_DEFAULT = '';
+const CLIENT_ID_DEFAULT = '634935377819-d73m1hp8oqbo1c6mc2mhr7qr17b7aptl.apps.googleusercontent.com';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const AUTH_KEY = 'apolo-auth', FFCV_KEY = 'apolo-ffcv', FFCV_IMPORT_KEY = 'apolo-ffcv-import';
 const AUTH = { token: null, exp: 0 };
