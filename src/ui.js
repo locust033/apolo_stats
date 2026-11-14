@@ -146,6 +146,8 @@ async function initAuth() {
   mcpState = ready() ? 'ready' : 'none';
   render();
   if (!ready()) return;
+  UI.hold = true; // una sola pintada al terminar de cargar, para que no parpadee
+  try {
   if (!sid()) { S.ui.tab = 'settings'; UI.err.auth = 'Pega el enlace de tu Google Sheet en Ajustes.'; render(); return; }
   await refreshSheets();
   await loadStats(true);
@@ -155,6 +157,7 @@ async function initAuth() {
   const m = cur();
   // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
   await openMatch(S.current ?? S.sheets[0].id, { reload: !(m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) });
+  } finally { UI.hold = false; render(); }
   if (resumeAfterLogin === 'save' && cur()) saveToSheet(cur());
 }
 async function refreshSheets() {
@@ -188,6 +191,9 @@ function applyFfcv(m, force = false) {
 // Copias guardadas en el móvil por versiones anteriores de la app
 function migrateMatch(m) {
   if (m.finalized === undefined && m.imp && m.imp.score && m.imp.score.final && !m.events.length) m.finalized = true;
+  // jornadas guardadas solo con convocatoria/once que una versión anterior tomó por jugadas
+  if (!m.finalized && m.clock.phase === 'end' && !m.events.length && m.imp && !(m.imp.score && m.imp.score.final)
+      && Object.values(m.ov).every(o => Object.values(o).every(v => !str(v)))) { m.clock = { phase: 'pre' }; m.imp = null; m.ov = {}; }
 }
 function seedMatch(sheet) {
   const L = { players: [], rivalPlayers: [], goals: { ours: [], theirs: [] }, rival: sheetShort(sheet.title).name, team: 'C.D. APOLO' };
@@ -204,7 +210,8 @@ async function openMatch(id, { reload = false } = {}) {
   if (!S.matches[id] || reload) {
     if (!S.matches[id]) S.matches[id] = seedMatch(sh);
     if (ready()) {
-      UI.loading[id] = true; render();
+      const hadLocal = !!S.matches[id] && !S.matches[id].seed;
+      if (!hadLocal) { UI.loading[id] = true; render(); }
       try {
         const rows = await readRows(sh.title); const L = parseLayout(rows);
         const prev = S.matches[id];
@@ -228,7 +235,7 @@ function autoStep(m) {
   if (ph === 'end') return 'cierre';
   const nCalled = m.roster.filter(p => m.called[p.id]).length;
   const nLine = Object.values(m.lineup).filter(id => m.called[id]).length;
-  if (nLine >= 11) return 'rival';
+  if (nLine >= 11) return 'directo';
   if (nCalled > 0) return 'once';
   return 'previa';
 }
@@ -462,6 +469,7 @@ const IC = {
 const STEPS = [['previa', 'Previa'], ['convocatoria', 'Convocatoria'], ['once', 'Once'], ['rival', 'Rival'], ['directo', 'Directo'], ['cierre', 'Cierre']];
 
 function render() {
+  if (UI.hold) return;
   const app = $('#app'); if (!app) return;
   const y = window.scrollY;
   const m = cur();
@@ -1263,8 +1271,8 @@ setInterval(() => {
 }, 1000);
 setInterval(() => {
   const m = cur(); if (!m || S.ui.tab !== 'match' || S.ui.step !== 'directo' || UI.sheet) return;
-  if (m.clock.phase === 'h1' || m.clock.phase === 'h2') render();
-}, 10000);
+  if (m.clock.phase === 'h1' || m.clock.phase === 'h2') { const mn = clockMinute(m.clock, H()); if (mn !== UI.lastMin) { UI.lastMin = mn; render(); } }
+}, 5000);
 
 function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}

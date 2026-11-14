@@ -136,7 +136,18 @@ function matchFromLayout(sheet, L) {
     ov: {}, imp: null, savedAt: null, dirty: false, seq: 1,
   };
   for (const p of L.players) if (!p.blank) m.roster.push({ id: pkey(p.name, p.dorsal), name: p.name, dorsal: p.dorsal, extra: false });
-  const played = L.players.some(p => p.tit || p.sup) || !!L.final;
+  // Jugado = hay resultado o estadísticas. Con solo convocatoria/once guardados, el partido aún no se ha jugado.
+  const hasStats = L.players.some(p => p.min || p.g || p.a || p.gp || p.ta || p.tr || p.mvp);
+  const played = !!L.final || hasStats;
+  if (!played) {
+    const slots0 = FORMATIONS[m.formation];
+    for (const p of L.players) {
+      if (p.blank || !(p.tit || p.sup)) continue;
+      const id = pkey(p.name, p.dorsal);
+      m.called[id] = true; if (p.cap) m.captain = id;
+      if (p.tit) { const s = toInt(p.pos.split(/\s+/)[0]); if (slots0[s] && !m.lineup[s]) m.lineup[s] = id; }
+    }
+  }
   if (played) {
     m.imp = { score: { h1: L.h1, h2: L.h2, final: L.final }, goals: L.goals };
     m.clock.phase = 'end';
