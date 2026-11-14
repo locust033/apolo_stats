@@ -69,6 +69,9 @@ function guessFormation(text) {
   return FORMATIONS[digits] ? digits : null;
 }
 
+// Valoraciones del campo (fila VALORACIONES del Excel): clave, cabecera en el Excel, texto en la app
+const VAL_FIELDS = [['vest', 'VESTUARIO', 'Vestuario'], ['duch', 'DUCHAS', 'Duchas'], ['bal', 'BALONES', 'Balones'], ['terr', 'TERRENO', 'Terreno de juego'], ['aten', 'ATENCION', 'Atención']];
+
 // ---- Lectura de la estructura de una hoja de jornada ----
 function parseLayout(rows) {
   const R = rows || [];
@@ -93,6 +96,15 @@ function parseLayout(rows) {
   const cron = find(r => noacc(up(r[0])).startsWith('CRONICA 1'), total);
   const gh = find(r => up(r[0]) === 'MINUTO' && up(r[1]) === 'DORSAL', Math.max(total, cron));
   const obs = find(r => noacc(up(r[0])).startsWith('OBSERVACIONES'), total);
+  const val = find(r => noacc(up(r[0])).startsWith('VALORACION'), total);
+  const valCols = {}, vals = {};
+  if (val >= 0) {
+    const lab = R[val + 1] || [];
+    for (const [k, name] of VAL_FIELDS) {
+      const col = lab.findIndex(x => noacc(up(x)).startsWith(name));
+      if (col >= 0) { valCols[k] = col; vals[k] = c(val + 2, col); }
+    }
+  }
   const rivalPlayers = [];
   if (rh >= 0) for (let i = rh + 1; i <= rh + 11; i++) {
     const p = { name: c(i,0), dorsal: c(i,1), pos: c(i,2), goals: c(i,3), cards: c(i,4), note: c(i,5) };
@@ -105,7 +117,7 @@ function parseLayout(rows) {
   }
   return {
     hdr, total, players, hasCap: up(c(hdr,12)) === 'CAP',
-    sist, rh, plan, cron, gh, obs,
+    sist, rh, plan, cron, gh, obs, val, valCols, vals,
     title: c(1,0), rival: c(4,0), team: c(13,0),
     lugar: c(7,3), fecha: c(8,3), hora: c(9,3), cit: c(10,3),
     h1: c(7,10), h2: c(8,10), final: c(10,10),
@@ -133,6 +145,7 @@ function matchFromLayout(sheet, L) {
       players: L.rivalPlayers.map(p => { const cc = parseCards(p.cards); return { name: p.name, dorsal: p.dorsal, pos: p.pos, goals: toInt(p.goals), y: cc.y, r: cc.r, note: p.note }; }) },
     clock: { phase: 'pre' }, events: [], mvp: {},
     texts: { plan: L.plan_t, cron1: L.cron1, cron2: L.cron2, obs: L.obs_t },
+    vals: { ...(L.vals || {}) },
     ov: {}, imp: null, savedAt: null, dirty: false, seq: 1,
   };
   for (const p of L.players) if (!p.blank) m.roster.push({ id: pkey(p.name, p.dorsal), name: p.name, dorsal: p.dorsal, extra: false });
@@ -327,4 +340,4 @@ function aggregate(summaries) {
   return { games, team, players: Object.values(byP) };
 }
 
-if (typeof module !== 'undefined') module.exports = { FORMATIONS, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };
+if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };

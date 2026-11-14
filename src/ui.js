@@ -100,6 +100,13 @@ async function call(tool, input = {}, { read = false } = {}) {
 }
 const sid = () => { const v = str(S.settings.sid); const m = v.match(/\/d\/([a-zA-Z0-9_-]+)/); return m ? m[1] : v; };
 async function readRows(t) { const p = await call('get_values', { range: `${qs(t)}!A1:M140` }, { read: true }); return (p && p.values) || []; }
+// Fila de notas de VALORACIONES: rango y valores (null = casilla que no se toca)
+function valRow(L, get) {
+  const cols = Object.entries(L.valCols || {}); if (L.val == null || L.val < 0 || !cols.length) return null;
+  const lo = Math.min(...cols.map(x => x[1])), hi = Math.max(...cols.map(x => x[1]));
+  const row = Array(hi - lo + 1).fill(null); for (const [k, ci] of cols) row[ci - lo] = get(k);
+  return [`${colL(lo)}${L.val + 3}:${colL(hi)}${L.val + 3}`, [row]];
+}
 async function writeVals(range, values) { return call('update_values', { range, values }); }
 
 // ---- Datos de la federación, guardados en la pestaña oculta "FFCV" del Excel ----
@@ -190,6 +197,7 @@ function applyFfcv(m, force = false) {
 }
 // Copias guardadas en el móvil por versiones anteriores de la app
 function migrateMatch(m) {
+  if (!m.vals) m.vals = {};
   if (m.finalized === undefined && m.imp && m.imp.score && m.imp.score.final && !m.events.length) m.finalized = true;
   // jornadas guardadas solo con convocatoria/once que una versión anterior tomó por jugadas
   if (!m.finalized && m.clock.phase === 'end' && !m.events.length && m.imp && !(m.imp.score && m.imp.score.final)
@@ -337,6 +345,8 @@ async function saveToSheet(m) {
     if (L.plan >= 0) writes.push([`${qs(t)}!A${L.plan + 2}`, [[m.texts.plan || '']]]);
     if (L.cron >= 0) writes.push([`${qs(t)}!A${L.cron + 2}:E${L.cron + 2}`, [[m.texts.cron1 || '', null, null, null, m.texts.cron2 || '']]]);
     if (L.obs >= 0) writes.push([`${qs(t)}!A${L.obs + 2}`, [[m.texts.obs || '']]]);
+    const vr = valRow(L, k => { const v = str((m.vals || {})[k]); return v === '' ? '' : (isNaN(+v) ? v : +v); });
+    if (vr) writes.push([`${qs(t)}!${vr[0]}`, vr[1]]);
     if (L.gh >= 0) {
       writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, pad(gr.ours.map(r => [toCell(r[0]), toCell(r[1]), r[2]]), 11, 3)]);
       writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, pad(gr.theirs.map(r => [toCell(r[0]), null, toCell(r[1]), r[2]]), 11, 4).map(r => [r[0], null, r[2], r[3]])]);
@@ -400,6 +410,7 @@ async function wipeJornada(m) {
     if (L.plan >= 0) writes.push([`${qs(t)}!A${L.plan + 2}`, [['']]]);
     if (L.cron >= 0) writes.push([`${qs(t)}!A${L.cron + 2}:E${L.cron + 2}`, [['', null, null, null, '']]]);
     if (L.obs >= 0) writes.push([`${qs(t)}!A${L.obs + 2}`, [['']]]);
+    const vr = valRow(L, () => ''); if (vr) writes.push([`${qs(t)}!${vr[0]}`, vr[1]]);
     if (L.gh >= 0) { writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, blank(11, 3)]); writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, blank(11, 4).map(r => [r[0], null, r[2], r[3]])]); }
     await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
     try { await call('update_spreadsheet', { requests: resultColorReqs(m.sheetId, null) }); } catch (e) {}
@@ -807,8 +818,17 @@ function summaryView(m) {
       ${field('Crónica 1ª parte', `<textarea data-bind="texts.cron1" rows="5">${esc(m.texts.cron1)}</textarea>`)}
       ${field('Crónica 2ª parte', `<textarea data-bind="texts.cron2" rows="5">${esc(m.texts.cron2)}</textarea>`)}
       ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}</div>
+    ${valsCard(m)}
     <button class="btn primary wide big" data-act="save" ${UI.sync === 'saving' ? 'disabled' : ''}>${UI.sync === 'saving' ? esc(UI.syncMsg) : 'Guardar en el Excel'}</button>
     <button class="link" data-act="askReopen">Reabrir la jornada (convocatoria, once y directo)</button>`;
+}
+// Valoraciones del campo: nota del 1 al 10 por apartado; tocar la misma nota la quita
+function valsCard(m) {
+  const v = m.vals || {};
+  return `<div class="card vals"><div class="eyebrow">Valoraciones</div>
+    ${VAL_FIELDS.map(([k, , label]) => `<div class="valrow"><div class="vlab"><span>${esc(label)}</span><b>${esc(str(v[k])) || '—'}</b></div>
+      <div class="vnums">${Array.from({ length: 10 }, (_, i) => i + 1).map(n => `<button class="vn ${str(v[k]) === String(n) ? 'on' : ''}" data-act="setVal" data-k="${k}" data-n="${n}" aria-label="${esc(label)} ${n}">${n}</button>`).join('')}</div></div>`).join('')}
+  </div>`;
 }
 function cierreView(m) {
   const comp = compute(m, H());
@@ -828,6 +848,7 @@ function cierreView(m) {
     <div class="card">${field('Crónica 1ª parte', `<textarea data-bind="texts.cron1" rows="5">${esc(m.texts.cron1)}</textarea>`)}
       ${field('Crónica 2ª parte', `<textarea data-bind="texts.cron2" rows="5">${esc(m.texts.cron2)}</textarea>`)}
       ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}</div>
+    ${valsCard(m)}
     <h3 class="h3">Repaso antes de guardar</h3>
     <p class="muted small">Calculado con los eventos del directo. Puedes corregir cualquier casilla; lo corregido sale marcado.</p>
     <div class="tablewrap"><table class="review"><thead><tr><th>Jugadora</th><th>T/S</th><th>Min</th><th>Pos</th><th>G</th><th>A</th><th>GP</th><th>TA</th><th>TR</th></tr></thead><tbody>
@@ -1127,7 +1148,7 @@ const ACT = {
   askWipeJ() {
     const m = cur();
     openSheet({ type: 'confirm', title: 'Borrar datos de la jornada',
-      text: `Vas a borrar <b>todos los datos</b> de la hoja <b>«${esc(m.title)}»</b> del Excel: resultado, lugar, fecha y horas, convocatoria, titulares, minutos, posiciones, goles, asistencias, tarjetas, MVP, capitana, rival, sistemas, planteamiento, crónicas, goles y observaciones. Se mantienen los nombres y dorsales de la plantilla y el formato. <b>No se puede deshacer.</b>`,
+      text: `Vas a borrar <b>todos los datos</b> de la hoja <b>«${esc(m.title)}»</b> del Excel: resultado, lugar, fecha y horas, convocatoria, titulares, minutos, posiciones, goles, asistencias, tarjetas, MVP, capitana, rival, sistemas, planteamiento, crónicas, goles, observaciones y valoraciones. Se mantienen los nombres y dorsales de la plantilla y el formato. <b>No se puede deshacer.</b>`,
       ok: 'Sí, borrar la jornada', act: 'doWipeJ' });
   },
   doWipeJ() { const m = cur(); closeSheet(); wipeJornada(m); },
@@ -1302,6 +1323,7 @@ const ACT = {
   minInc() { const s = UI.sheet; s.min = (+s.min || 0) + 1; renderSheet(); },
   half(el) { const s = UI.sheet; s.half = +el.dataset.v; if (s.half === 2 && +s.min <= H()) s.min = H() + 1; if (s.half === 1 && +s.min > H() + 10) s.min = H(); renderSheet(); },
   // cierre
+  setVal(el) { const m = cur(); if (!m.vals) m.vals = {}; const k = el.dataset.k, n = el.dataset.n; if (str(m.vals[k]) === n) m.vals[k] = ''; else m.vals[k] = n; touch(m); },
   mvp(el) { const m = cur(); const id = el.dataset.id; if (m.mvp[id]) delete m.mvp[id]; else m.mvp[id] = true; touch(m); },
   clearOv() { openSheet({ type: 'confirm', title: 'Recalcular todo', text: 'Se quitan las correcciones a mano y los datos importados del Excel de esta jornada; todo se calcula con los eventos del directo.', ok: 'Recalcular', act: 'doClearOv' }); },
   doClearOv() { const m = cur(); m.ov = {}; m.imp = null; closeSheet(); touch(m); },

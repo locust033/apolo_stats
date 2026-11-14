@@ -370,3 +370,12 @@ nav.bottom button.on .ic { color: var(--accent); }
 .rprow .rpi small { color: var(--muted); font-weight: 700; font-size: 12px; }
 .rprow .rpi em { font-style: normal; color: var(--muted); font-size: 13px; }
 .rprow .tc { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-size: 13px; }
+
+/* Valoraciones del campo */
+.vals .valrow { padding: 8px 0; border-top: 1px solid var(--line); }
+.vals .valrow:first-of-type { border-top: 0; }
+.vals .vlab { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.vals .vlab b { font-variant-numeric: tabular-nums; font-size: 16px; }
+.vals .vnums { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.vals .vn { min-height: 36px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--card); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; padding: 0; }
+.vals .vn.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
