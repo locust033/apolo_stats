@@ -26,6 +26,12 @@ jobs:
         env:
           GOOGLE_SA: ${{ secrets.GOOGLE_SA }}
           SHEET_ID: 1NIOy0FJE7ZojeUCjoY0qkNdH0_nSJNEnHTcigUdzGY0
+      - name: Diagnóstico
+        run: node avisos/diag.mjs
+        continue-on-error: true
+        env:
+          GOOGLE_SA: ${{ secrets.GOOGLE_SA }}
+          SHEET_ID: 1NIOy0FJE7ZojeUCjoY0qkNdH0_nSJNEnHTcigUdzGY0
       - name: Datos de la federación
         run: node avisos/ffcv.mjs
         continue-on-error: true
