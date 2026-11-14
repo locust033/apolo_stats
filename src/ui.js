@@ -1104,7 +1104,9 @@ function scoutView(forceCod = null, embedded = false) {
   const cod = forceCod || (S.ui.scoutCod && FFCV_SNAP.clas.some(c => c[1] === S.ui.scoutCod) ? S.ui.scoutCod : defaultScoutCod());
   const t = FFCV_SNAP.clas.find(c => c[1] === cod); const team = FFCV_SNAP.teams.find(x => x.cod === cod) || { pl: [], es: [] };
   const isNext = cod === defaultScoutCod();
-  const chips = embedded ? '' : `<div class="chips scroll">${FFCV_SNAP.clas.filter(c => c[1] !== APOLO_COD).map(c => `<button class="chip ${c[1] === cod ? 'on' : ''}" data-act="scoutTeam" data-v="${c[1]}">${esc(title(c[2]).replace(/^[A-Z]\.[A-Z]\.(?:[A-Z]\.)?\s*/i, ''))}</button>`).join('')}</div>`;
+  // equipos por orden alfabético (sin «C.F.», «U.D.»… delante)
+  const tLabel = c => title(c[2]).replace(/^[A-Z]\.[A-Z]\.(?:[A-Z]\.)?\s*/i, '');
+  const chips = embedded ? '' : `<div class="chips scroll">${FFCV_SNAP.clas.filter(c => c[1] !== APOLO_COD).sort((x, y) => tLabel(x).localeCompare(tLabel(y), 'es', { sensitivity: 'base' })).map(c => `<button class="chip ${c[1] === cod ? 'on' : ''}" data-act="scoutTeam" data-v="${c[1]}">${esc(tLabel(c))}</button>`).join('')}</div>`;
   const res = teamResults(cod);
   const pill = r => { const k = { G: 'w', E: 'd', P: 'l' }[r] || r; return `<i class="rpill ${k}">${{ w: 'V', d: 'E', l: 'D' }[k]}</i>`; };
   const esc_ = team.es.reduce((o, e) => (o[e] = (o[e] || 0) + 1, o), {}); const esTop = Object.entries(esc_).sort((a, b) => b[1] - a[1])[0];
