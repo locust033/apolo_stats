@@ -560,7 +560,7 @@ function doMove(m, slot) {
 }
 // Mantener pulsada una suplente: más opciones (tarjetas en el banquillo, etc.)
 let lpTimer = null, lpStart = null, lpAt = 0;
-const lpFired = () => Date.now() - lpAt < 700;
+const lpFired = () => Date.now() - lpAt < 400;
 document.addEventListener('pointerdown', ev => {
   const el = ev.target.closest('.bchip[data-id]'); if (!el) return;
   lpStart = { x: ev.clientX, y: ev.clientY }; clearTimeout(lpTimer);
@@ -569,6 +569,44 @@ document.addEventListener('pointerdown', ev => {
 document.addEventListener('pointermove', ev => { if (lpStart && Math.hypot(ev.clientX - lpStart.x, ev.clientY - lpStart.y) > 10) { clearTimeout(lpTimer); lpStart = null; } });
 for (const t of ['pointerup', 'pointercancel']) document.addEventListener(t, () => { clearTimeout(lpTimer); lpStart = null; });
 document.addEventListener('contextmenu', ev => { if (ev.target.closest('.bchip')) ev.preventDefault(); });
+// Arrastrar en el campo: mantén pulsada una jugadora y suéltala sobre otra (se intercambian) o sobre un hueco libre
+let drag = null;
+document.addEventListener('pointerdown', ev => {
+  const el = ev.target.closest('.livepitch .tok[data-act="livePlayer"]'); if (!el || UI.pickIn || UI.pickMove) return;
+  const start = { x: ev.clientX, y: ev.clientY };
+  drag = { el, start, armed: false, timer: setTimeout(() => {
+    if (!drag || drag.el !== el) return;
+    drag.armed = true; lpAt = Date.now(); if (navigator.vibrate) navigator.vibrate(15);
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true); g.classList.add('dragghost'); g.style.left = r.left + 'px'; g.style.top = r.top + 'px'; g.style.width = r.width + 'px';
+    document.body.appendChild(g); drag.ghost = g; drag.dx = start.x - r.left; drag.dy = start.y - r.top;
+    el.classList.add('dragsrc'); el.closest('.livepitch').classList.add('picking', 'dragging');
+  }, 280) };
+});
+document.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  if (!drag.armed) { if (Math.hypot(ev.clientX - drag.start.x, ev.clientY - drag.start.y) > 10) { clearTimeout(drag.timer); drag = null; } return; }
+  drag.ghost.style.left = (ev.clientX - drag.dx) + 'px'; drag.ghost.style.top = (ev.clientY - drag.dy) + 'px';
+  drag.ghost.style.visibility = 'hidden'; const under = document.elementFromPoint(ev.clientX, ev.clientY); drag.ghost.style.visibility = '';
+  const t = under && under.closest('.livepitch .tok');
+  document.querySelectorAll('.tok.dropover').forEach(x => x !== t && x.classList.remove('dropover'));
+  if (t && t !== drag.el) t.classList.add('dropover');
+});
+function endDrag(ev, cancel) {
+  if (!drag) return; const d = drag; drag = null; clearTimeout(d.timer);
+  if (!d.armed) return;
+  lpAt = Date.now();
+  let target = null;
+  if (!cancel && ev) { d.ghost.style.visibility = 'hidden'; const under = document.elementFromPoint(ev.clientX, ev.clientY); target = under && under.closest('.livepitch .tok'); }
+  d.ghost.remove(); d.el.classList.remove('dragsrc');
+  const pitchEl = d.el.closest('.livepitch'); if (pitchEl) pitchEl.classList.remove('picking', 'dragging');
+  if (target && target !== d.el) { const m = cur(); UI.pickMove = d.el.dataset.id; doMove(m, +target.dataset.slot); }
+  else render();
+}
+document.addEventListener('pointerup', ev => endDrag(ev, false));
+document.addEventListener('pointercancel', ev => endDrag(ev, true));
+document.addEventListener('touchmove', ev => { if (drag && drag.armed) ev.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', ev => { if (ev.target.closest('.livepitch .tok')) ev.preventDefault(); });
 const nowMinute = m => { const half = clockHalf(m.clock); return { min: Math.max(half === 2 && m.clock.phase === 'h2' ? H() + 1 : 1, clockMinute(m.clock, H())), half }; };
 
 // ===== AVISOS Y PANTALLA ENCENDIDA =====
@@ -856,10 +894,10 @@ function liveView(m) {
     ${nTit < 11 ? `<div class="banner">Faltan titulares (${nTit}/11). Puedes completarlo en <button class="link" data-act="step" data-v="once">Once</button>.</div>` : ''}
     ${imported ? `<div class="banner">Este partido ya estaba en el Excel. Si apuntas un gol nuevo, el marcador se recalcula solo con los goles apuntados aquí.</div>` : ''}
     <div class="quick two"><button class="btn rgoal" data-act="rgoalStart">${IC.ball} Gol rival</button><button class="btn" data-act="rcardStart">${IC.card('Y')} Tarjeta rival</button></div>
-    <p class="muted small hint">Para un gol nuestro, toca a la goleadora en el campo.</p>
+    <p class="muted small hint">Para un gol nuestro, toca a la goleadora en el campo. Mantén pulsada a una jugadora y arrástrala para cambiarla de posición.</p>
     ${UI.pickMove ? `<div class="pickbar"><span>Cambio de posición de <b>${esc(title(rmap(m)[UI.pickMove]?.name || ''))}</b>: toca su nueva posición (otra jugadora o un hueco libre)</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
     ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale${Object.keys(comp.field).length < 11 ? ' o un hueco libre' : ''}</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
-    <div class="${UI.pickIn || UI.pickMove ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
+    <div class="livepitch ${UI.pickIn || UI.pickMove ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
     <div class="formline"><span class="muted small">${Object.keys(comp.field).length < 11 && m.clock.phase !== 'pre' ? `<b class="short">${Object.keys(comp.field).length} en el campo</b> · ` : ''}Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
     <h3 class="h3">Banquillo <span class="muted small">toca una y luego a quién sustituye · mantén pulsada para tarjetas</span></h3>
     <div class="benchrow">${bench.map(p => { const c = comp.P[p.id]; const dis = c.expelled;
@@ -1375,6 +1413,7 @@ const ACT = {
     if (s.half === 1) { m.clock.phase = 'h1'; m.clock.h1Start = now - mins * 60000; } else { m.clock.phase = 'h2'; m.clock.h2Start = now - Math.max(0, mins - H()) * 60000; }
     closeSheet(); touch(m); },
   livePlayer(el) {
+    if (lpFired()) return;
     const m = cur(); const out = el.dataset.id;
     if (UI.pickMove) return doMove(m, +el.dataset.slot);
     if (UI.pickIn) {

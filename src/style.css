@@ -389,3 +389,10 @@ nav.bottom button.on .ic { color: var(--accent); }
 .picking .tok.empty .disc { box-shadow: 0 0 0 3px var(--accent); border-style: solid; }
 .picking .tok.sel .disc { animation: none; box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--accent); transform: scale(1.08); }
 .bchip { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* Arrastrar jugadoras en el campo */
+.livepitch .tok { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.tok.dragghost { position: fixed; transform: scale(1.15); transform-origin: 50% 30%; z-index: 60; pointer-events: none; filter: drop-shadow(0 8px 14px rgba(0,0,0,.4)); }
+.tok.dragghost .disc { animation: none; box-shadow: 0 0 0 3px var(--accent), 0 6px 14px rgba(0,0,0,.4); }
+.tok.dragsrc { opacity: .3; }
+.livepitch.dragging .tok .disc { animation: none; }
+.tok.dropover .disc { transform: scale(1.18); box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--accent) !important; transition: transform .12s; }
