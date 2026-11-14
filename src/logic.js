@@ -134,6 +134,20 @@ function parseLayout(rows) {
   };
 }
 
+// Nota de una destacada del rival: «Goleadora» (etiqueta) + datos de temporada de la federación (solo en la app) + tu nota.
+// En el Excel solo va «Goleadora, tu nota».
+function splitNote(note, auto = true) { // auto = false: del Excel, solo se separa la etiqueta
+  let t = str(note).trim(), tag = ''; const info = [];
+  const g = t.match(/^goleadora\b/i); if (g) { tag = g[0]; t = t.slice(g[0].length); }
+  for (;auto;) {
+    t = t.replace(/^[\s·,.:;\-–]+/, '');
+    const m = t.match(/^(\d+ gol(?:es)?(?: \(\d+ pen\.\))?|\d+ amarillas?|\d+ rojas?)(?![\p{L}\d])/u);
+    if (!m) break; info.push(m[1]); t = t.slice(m[0].length);
+  }
+  return { tag, info: info.join(' · '), note: (tag ? t.replace(/^[\s·,.:;\-–]+/, '') : t).trim() };
+}
+const joinNote = p => [str(p.tag), str(p.note)].filter(Boolean).join(', ');
+
 function parseCards(s) {
   s = up(s); const a = s.match(/(\d+)\s*A/); const r = s.match(/(\d+)\s*R/);
   return { y: a ? +a[1] : (/\bA\b/.test(s) ? 1 : 0), r: r ? +r[1] : (/\bR\b/.test(s) ? 1 : 0) };
@@ -147,7 +161,7 @@ function matchFromLayout(sheet, L) {
     roster: [], called: {}, formation: guessFormation(L.ourForm) || DEFAULT_FORMATION, formationText: L.ourForm || '',
     lineup: {}, captain: null,
     rival: { name: L.rivalName || L.rival || '', formation: L.rivalForm || '',
-      players: L.rivalPlayers.map(p => { const cc = parseCards(p.cards); return { name: p.name, dorsal: p.dorsal, pos: p.pos, goals: toInt(p.goals), y: cc.y, r: cc.r, note: p.note }; }) },
+      players: L.rivalPlayers.map(p => { const cc = parseCards(p.cards); return { name: p.name, dorsal: p.dorsal, pos: p.pos, goals: toInt(p.goals), y: cc.y, r: cc.r, ...splitNote(p.note, false) }; }) },
     clock: { phase: 'pre' }, events: [], mvp: {},
     texts: { plan: L.plan_t, cron1: L.cron1, cron2: L.cron2, obs: L.obs_t, pos: L.pos_t || '', mej: L.mej_t || '' },
     vals: { ...(L.vals || {}) },
@@ -345,4 +359,4 @@ function aggregate(summaries) {
   return { games, team, players: Object.values(byP) };
 }
 
-if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };
+if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };

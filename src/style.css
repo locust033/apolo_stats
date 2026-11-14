@@ -384,3 +384,5 @@ nav.bottom button.on .ic { color: var(--accent); }
 .glist li.ghalf { display: flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .glist li.ghalf::before, .glist li.ghalf::after { content: ''; flex: 1; border-top: 1.5px dashed color-mix(in srgb, var(--muted) 60%, transparent); }
 .glist li.gnone { display: block; color: var(--muted); font-size: 13px; }
+.rpi .rtag { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--good); }
+.rpi .rinfo { color: var(--muted); font-size: 12px; font-weight: 500; }
