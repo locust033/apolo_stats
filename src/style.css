@@ -399,3 +399,26 @@ nav.bottom button.on .ic { color: var(--accent); }
 .avisos .tgl { display: flex; gap: 10px; align-items: center; padding: 8px 0; font-weight: 600; font-size: 14.5px; }
 .avisos .tgl input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 .avisos .ok { color: var(--good); }
+/* Ficha de jugadora por jornada */
+.jgl { display: grid; gap: 6px; }
+.jg { border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.jg > summary, .jg.off { list-style: none; display: grid; grid-template-columns: 34px 1fr auto auto; grid-template-areas: "n r res ic" "bar bar bar bar"; align-items: center; column-gap: 8px; row-gap: 6px; padding: 9px 12px; cursor: pointer; }
+.jg > summary::-webkit-details-marker { display: none; }
+.jg.off { opacity: .55; cursor: default; }
+.jg .jn { grid-area: n; font-family: var(--display); font-weight: 800; font-size: 16px; }
+.jg .jr { grid-area: r; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jg .gres { grid-area: res; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.gres.w { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); } .gres.d { background: color-mix(in srgb, #d4a106 22%, transparent); color: #9a7400; } .gres.l { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); }
+.jg .jicons { grid-area: ic; display: inline-flex; gap: 3px; align-items: center; font-size: 15px; }
+.jg .ico { position: relative; line-height: 1; }
+.jg .ico sup { font-size: 10px; font-weight: 800; margin-left: 1px; vertical-align: super; }
+.jg .jbar { grid-area: bar; display: flex; align-items: center; gap: 8px; }
+.jg .jbar .bt { flex: 1; height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; display: block; }
+.jg .jbar .bf { display: block; height: 100%; border-radius: 99px; background: var(--good); }
+.jg .jbar b { font-size: 13px; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.jg .jbar em { font-size: 12.5px; color: var(--muted); font-style: normal; }
+.jg[open] > summary { border-bottom: 1px dashed var(--line); }
+.jdet { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; padding: 10px 12px 12px; font-size: 14px; }
+.jdet dt { color: var(--muted); font-weight: 600; } .jdet dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.poschip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 3px; border-radius: 999px; background: color-mix(in srgb, var(--line) 55%, transparent); font-size: 13px; }
+.poschip b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 11.5px; }

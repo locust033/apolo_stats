@@ -1241,6 +1241,39 @@ async function setAvisosKeyApp(key, val) {
   await writeVals(i >= 0 ? `'AVISOS'!A${i + 1}:B${i + 1}` : `'AVISOS'!A${rows.length + 1}:B${rows.length + 1}`, [[key, val]]);
 }
 
+// Ficha de una jugadora: una fila desplegable por jornada (barra de minutos + iconos), con el detalle dentro
+const POS_NAME = { 1: 'Portera', 2: 'Lateral derecha', 3: 'Lateral izquierda', 4: 'Central', 5: 'Central', 6: 'Pivote', 7: 'Extremo derecho', 8: 'Interior', 9: 'Delantera centro', 10: 'Mediapunta', 11: 'Extremo izquierdo' };
+function playerGames(p, A) {
+  const full = 2 * H();
+  const byN = Object.fromEntries(A.games.map(g => [g.n, g]));
+  const icons = g => [
+    g.g ? `<span class="ico" title="${g.g} gol${g.g > 1 ? 'es' : ''}">⚽${g.g > 1 ? `<sup>${g.g}</sup>` : ''}</span>` : '',
+    g.ta ? `<span class="ico" title="Amarilla">🟨${g.ta > 1 ? `<sup>${g.ta}</sup>` : ''}</span>` : '',
+    g.tr ? '<span class="ico" title="Roja">🟥</span>' : '',
+    g.mvp ? '<span class="ico" title="MVP">⭐</span>' : '',
+    g.cap ? '<i class="cap inl" title="Capitana">C</i>' : ''].join('');
+  const res = n => { const s = byN[n]; if (!s || !s.final) return ''; const [a, b] = s.final; const k = a > b ? 'w' : a === b ? 'd' : 'l'; return `<span class="gres ${k}">${a}-${b}</span>`; };
+  return `<div class="jgl">${p.games.map(g => {
+    const conv = g.conv || g.played;
+    const head = `<span class="jn">J${g.n}</span><span class="jr">${esc(title(g.rival))}</span>${res(g.n)}<span class="jicons">${icons(g)}</span>
+      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b>` : '<em>No convocada</em>'}</span>`;
+    if (!conv) return `<div class="jg off">${head}</div>`;
+    const pos = str(g.pos).split(/\s+/).filter(Boolean);
+    const rows = [
+      ['Papel', g.tit ? 'Titular' : 'Suplente'],
+      ['Minutos', `${g.min || 0}' de ${full}'`],
+      [pos.length > 1 ? 'Posiciones' : 'Posición', pos.length ? pos.map(x => `<span class="poschip"><b>${esc(x)}</b>${esc(POS_NAME[+x] || '')}</span>`).join('') : '—'],
+      g.g ? ['Goles', '⚽'.repeat(Math.min(g.g, 6)) + (g.g > 6 ? ` ×${g.g}` : '')] : null,
+      g.a ? ['Asistencias', String(g.a)] : null,
+      g.gp ? ['Gol en propia', String(g.gp)] : null,
+      g.ta || g.tr ? ['Tarjetas', '🟨'.repeat(g.ta || 0) + (g.tr ? '🟥' : '')] : null,
+      g.mvp ? ['MVP', '⭐ MVP del partido'] : null,
+      g.cap ? ['Capitana', 'Sí'] : null,
+    ].filter(Boolean);
+    return `<details class="jg"><summary>${head}</summary><dl class="jdet">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></details>`;
+  }).join('')}</div>`;
+}
+
 // ===== HOJA INFERIOR (diálogos) =====
 function openSheet(s) { UI.sheet = s; renderSheet(); }
 function closeSheet() { UI.sheet = null; renderSheet(); }
@@ -1371,8 +1404,7 @@ function renderSheet() {
       const A = aggregate(S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean)); const p = A.players.find(x => x.key === s.key); if (!p) { closeSheet(); return; }
       h = `${esc(title(p.name))} <small>#${esc(p.dorsal)}</small>`;
       body = `<div class="tiles small">${[['Min', p.min], ['Goles', p.g], ['Asist.', p.a], ['MVP', p.mvp]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
-        <div class="eyebrow">Minutos por jornada</div>${bars(p.games.map(g => ({ l: `J${g.n} ${title(g.rival).slice(0, 12)}`, v: g.min })), v => (v ? v + "'" : '—'))}
-        <ul class="gl">${p.games.filter(g => g.conv || g.played).map(g => `<li><b>J${g.n}</b> ${g.tit ? 'Titular' : 'Suplente'}${g.pos ? ` · pos. ${esc(g.pos)}` : ''}${g.g ? ` · ${g.g} gol` : ''}${g.a ? ` · ${g.a} asist.` : ''}${g.mvp ? ' · MVP' : ''}${g.cap ? ' · capitana' : ''}</li>`).join('')}</ul>`;
+        <div class="eyebrow">Por jornada</div>${playerGames(p, A)}`;
       break;
     }
   }
