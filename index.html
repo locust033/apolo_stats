@@ -938,6 +938,7 @@ async function saveToSheet(m) {
       fmtReq.push({ copyPaste: { source: { sheetId: shId, startRowIndex: L.hdr, endRowIndex: L.total + 1, startColumnIndex: 8, endColumnIndex: 9 },
         destination: { sheetId: shId, startRowIndex: L.hdr, endRowIndex: L.total + 1, startColumnIndex: 12, endColumnIndex: 13 }, pasteType: 'PASTE_FORMAT' } });
       fmtReq.push({ updateDimensionProperties: { range: { sheetId: shId, dimension: 'COLUMNS', startIndex: 12, endIndex: 13 }, properties: { pixelSize: 50 }, fields: 'pixelSize' } });
+      fmtReq.push({ updateBorders: { range: { sheetId: shId, startRowIndex: L.hdr, endRowIndex: L.hdr + 1, startColumnIndex: 12, endColumnIndex: 13 }, top: { style: 'SOLID', width: 1, colorStyle: { rgbColor: {} } } } });
     }
     // CAP con casilla de verificación, igual que MVP
     fmtReq.push({ setDataValidation: { range: { sheetId: shId, startRowIndex: L.hdr + 1, endRowIndex: L.total, startColumnIndex: 12, endColumnIndex: 13 }, rule: { condition: { type: 'BOOLEAN' }, showCustomUi: true } } });
