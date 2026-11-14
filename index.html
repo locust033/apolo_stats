@@ -1471,6 +1471,11 @@ function render() {
   const m = cur();
   app.innerHTML = topbar(m) + `<main id="main">${S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : settingsView()}</main>` + navbar();
   window.scrollTo(0, y);
+  // en las filas deslizables de botones, el elegido queda en el centro (al repintar se perdía la posición)
+  for (const row of app.querySelectorAll('.chips.scroll')) {
+    const on = row.querySelector('.chip.on'); if (!on) continue;
+    row.scrollLeft = Math.max(0, on.offsetLeft - row.offsetLeft - (row.clientWidth - on.offsetWidth) / 2);
+  }
   renderSheet(); renderToast();
 }
 function topbar(m) {
