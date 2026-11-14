@@ -364,3 +364,9 @@ nav.bottom button.on .ic { color: var(--accent); }
 
 .quick.two { grid-template-columns: 1fr 1fr; }
 .hint { margin: -6px 0 0; text-align: center; }
+
+.card.rprow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.rprow .rpi { flex: 1; min-width: 0; display: grid; gap: 1px; font-size: 14px; }
+.rprow .rpi small { color: var(--muted); font-weight: 700; font-size: 12px; }
+.rprow .rpi em { font-style: normal; color: var(--muted); font-size: 13px; }
+.rprow .tc { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-size: 13px; }

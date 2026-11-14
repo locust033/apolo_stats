@@ -654,6 +654,9 @@ function onceView(m) {
     ${nextBtn('rival', 'Apuntar el rival')}`;
 }
 
+// Sistemas del rival: varios separados por " - " (como en el Excel: "1.4.4.2 - 1.4.2.4.")
+const normF = s => str(s).replace(/[^\d]/g, '');
+const rivalForms = m => str(m.rival.formation).split(/\s+-\s+/).map(s => s.trim()).filter(Boolean);
 function rivalView(m, live = false) {
   const forms = ['1.4.4.2', '1.4.3.3', '1.4.2.3.1', '1.3.5.2', '1.5.3.2', '1.4.1.4.1'];
   const ro = isLocked(m) ? 'readonly' : '';
@@ -663,14 +666,19 @@ function rivalView(m, live = false) {
     ${live ? '' : '<h3 class="h3">Tus notas del rival</h3><p class="muted small">El sistema y las destacadas vienen de la federación; cámbialos o añade notas (rápida, técnica, juego aéreo…). En el Directo, «Apuntar rival» te deja seguir apuntando.</p>'}
     <div class="card">${field('Nombre del rival', inp('rival.name', m.rival.name || m.info.rival))}
     ${field('Sistema del rival', inp('rival.formation', m.rival.formation, 'placeholder="p. ej. 1.4.4.2 - 1.4.2.4."'))}
-    <div class="chips">${forms.map(f => `<button class="chip" data-act="rivalForm" data-v="${f}">${f}</button>`).join('')}</div></div>
+    <div class="chips">${forms.map(f => `<button class="chip ${rivalForms(m).some(x => normF(x) === normF(f)) ? 'on' : ''}" data-act="rivalForm" data-v="${f}">${f}</button>`).join('')}</div>
+    <p class="muted small">Toca un sistema para añadirlo y otra vez para quitarlo. Puedes marcar varios si cambian durante el partido.</p></div>
     <h3 class="h3">Jugadoras destacadas <span class="muted">${m.rival.players.length}/11</span></h3>
-    ${m.rival.players.map((p, i) => `<div class="card rp">
+    ${m.rival.players.map((p, i) => UI.rpEdit !== i ? `<div class="card rprow">
+      <span class="disc sm">${esc(p.dorsal || '?')}</span>
+      <div class="rpi"><b>${esc(title(p.name) || 'Sin nombre')}</b>${p.pos ? ` <small>${esc(p.pos)}</small>` : ''}${p.note ? `<em>${esc(p.note)}</em>` : ''}</div>
+      ${p.goals ? `<span class="tc">${IC.ball}${p.goals}</span>` : ''}${p.y ? `<span class="tc">${IC.card('Y')}${p.y}</span>` : ''}${p.r ? `<span class="tc">${IC.card('R')}${p.r}</span>` : ''}
+      <button class="btn ghost sm" data-act="rpEdit" data-i="${i}">Modificar</button></div>` : `<div class="card rp">
       <div class="row2b">${field('Nombre', inp(`rival.players.${i}.name`, p.name, 'autocapitalize="characters"'))}${field('Dorsal', inp(`rival.players.${i}.dorsal`, p.dorsal, 'inputmode="numeric"'), 'narrow')}</div>
       <div class="chips tight">${RIVAL_POS.map(x => `<button class="chip sm ${p.pos === x ? 'on' : ''}" data-act="rpPos" data-i="${i}" data-v="${x}">${x}</button>`).join('')}</div>
       <div class="row3">${field('Goles', inp(`rival.players.${i}.goals`, p.goals || '', 'type="number" min="0" inputmode="numeric" ' + ro))}${field('Amarillas', inp(`rival.players.${i}.y`, p.y || '', 'type="number" min="0" inputmode="numeric" ' + ro))}${field('Rojas', inp(`rival.players.${i}.r`, p.r || '', 'type="number" min="0" inputmode="numeric" ' + ro))}</div>
       ${field('A destacar', inp(`rival.players.${i}.note`, p.note, 'placeholder="Goleadora, rápida, juego aéreo…"'))}
-      <button class="link danger" data-act="rpDel" data-i="${i}">Quitar</button></div>`).join('')}
+      <div class="acts"><button class="btn primary" data-act="rpDone">Hecho</button><button class="btn danger" data-act="rpDel" data-i="${i}">Quitar</button></div></div>`).join('')}
     ${m.rival.players.length < 11 ? `<button class="btn wide" data-act="rpAdd">+ Añadir jugadora rival</button>` : ''}
     ${live ? '' : nextBtn('directo', 'Ir al directo')}`;
 }
@@ -1081,7 +1089,7 @@ const ACT = {
   step(el) { S.ui.step = el.dataset.v; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
   stepsToggle() { S.ui.stepsOpen = !S.ui.stepsOpen; persist(); render(); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
-  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } UI.unlocked = {}; UI.editStats = {}; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  openJ(el) { if (el.dataset.go) { S.ui.tab = "match"; } UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   railToggle() { S.ui.railOpen = !S.ui.railOpen; persist(); render(); if (S.ui.railOpen) { const c = document.getElementById('j' + S.current); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); } },
   reloadJ() { openMatch(S.current, { reload: true }); },
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
@@ -1153,10 +1161,16 @@ const ACT = {
   unslot() { const m = cur(); const id = m.lineup[UI.sheet.slot]; delete m.lineup[UI.sheet.slot]; if (m.captain === id) m.captain = null; closeSheet(); touch(m); },
   setCap(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; closeSheet(); touch(m); },
   // rival
-  rivalForm(el) { const m = cur(); m.rival.formation = el.dataset.v; touch(m); },
+  rivalForm(el) {
+    const m = cur(); const f = el.dataset.v; const cur0 = rivalForms(m);
+    const next = cur0.some(x => normF(x) === normF(f)) ? cur0.filter(x => normF(x) !== normF(f)) : [...cur0, f];
+    m.rival.formation = next.join(' - '); touch(m);
+  },
+  rpEdit(el) { UI.rpEdit = +el.dataset.i; render(); },
+  rpDone() { UI.rpEdit = null; render(); },
   rpPos(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.pos = p.pos === el.dataset.v ? '' : el.dataset.v; touch(m); },
-  rpAdd() { const m = cur(); m.rival.players.push({ name: '', dorsal: '', pos: '', goals: 0, y: 0, r: 0, note: '' }); touch(m); },
-  rpDel(el) { const m = cur(); m.rival.players.splice(+el.dataset.i, 1); touch(m); },
+  rpAdd() { const m = cur(); m.rival.players.push({ name: '', dorsal: '', pos: '', goals: 0, y: 0, r: 0, note: '' }); UI.rpEdit = m.rival.players.length - 1; touch(m); },
+  rpDel(el) { const m = cur(); m.rival.players.splice(+el.dataset.i, 1); UI.rpEdit = null; touch(m); },
   // directo
   phase() { const m = cur(); const c = m.clock, now = Date.now();
     if (c.phase === 'pre') { c.phase = 'h1'; c.h1Start = now; if (m.imp && !m.events.length) { m.imp = null; m.ov = {}; }
