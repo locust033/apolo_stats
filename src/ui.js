@@ -1265,8 +1265,9 @@ function playerGames(p, A) {
   const res = n => { const s = byN[n]; if (!s || !s.final) return ''; const [a, b] = s.final; const k = a > b ? 'w' : a === b ? 'd' : 'l'; return `<span class="gres ${k}">${a}-${b}</span>`; };
   return `<div class="jgl">${p.games.map(g => {
     const conv = g.conv || g.played;
-    const head = `<span class="jn">J${g.n}</span><span class="jr">${esc(title(g.rival))}</span>${res(g.n)}
-      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b><span class="jicons">${icons(g)}</span>` : '<em>No convocada</em>'}</span>`;
+    // iconos junto al rival; la barra va sola en su línea para que todas las jornadas midan igual
+    const head = `<span class="jn">J${g.n}</span><span class="jr"><span class="jrn">${esc(title(g.rival))}</span>${conv ? `<span class="jicons">${icons(g)}</span>` : ''}</span>${res(g.n)}
+      <span class="jbar">${conv ? `<span class="bt">${g.min ? `<span class="bf" style="width:${Math.min(100, g.min / full * 100)}%"></span>` : ''}</span><b>${g.min ? g.min + "'" : "0'"}</b>` : '<em>No convocada</em>'}</span>`;
     if (!conv) return `<div class="jg off">${head}</div>`;
     const pos = str(g.pos).split(/\s+/).filter(Boolean);
     const rows = [
