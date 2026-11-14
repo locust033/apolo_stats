@@ -97,11 +97,13 @@ async function main() {
     else if (ffcv.gridProperties.rowCount < data.length + 50) await batchUpdate([{ updateSheetProperties: { properties: { sheetId: ffcv.sheetId, gridProperties: { rowCount: data.length + 200, columnCount: 14 } }, fields: 'gridProperties.rowCount,gridProperties.columnCount' } }]);
     await clearRange("'FFCV'!A1:N5000");
     await writeRange(`'FFCV'!A1:M${data.length}`, data);
+    await writeRange("'FFCV'!N1", [[`ok · ${summary} · ${new Date().toISOString()}`]]);
     if (sheets.some(s => s.title === 'AVISOS')) await setAvisosKey('ffcv_estado', `ok · ${summary} · ${new Date().toISOString()}`);
     console.log('FFCV actualizado:', summary);
   } catch (e) {
     console.error(e);
-    if (sheets.some(s => s.title === 'AVISOS')) await setAvisosKey('ffcv_estado', `error · ${String(e.message || e).slice(0, 200)} · ${new Date().toISOString()}`);
+    const msg = `error · ${String(e.message || e).slice(0, 200)} · ${new Date().toISOString()}`;
+    try { if (ffcv) await writeRange("'FFCV'!N1", [[msg]]); if (sheets.some(s => s.title === 'AVISOS')) await setAvisosKey('ffcv_estado', msg); } catch (e2) { console.error(e2); }
     process.exitCode = 1;
   }
 }

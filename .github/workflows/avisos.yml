@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['avisos/**', '.github/workflows/avisos.yml']
 permissions:
   contents: write
 concurrency: avisos
