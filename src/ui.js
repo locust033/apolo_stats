@@ -441,6 +441,7 @@ function rivalPlayer(m, dorsal, create = true) {
 function addEvent(m, e) {
   if (e.t === 'move') { const other = compute(m, H()).field[e.slot]; if (other) delete m.ov[other]; }
   e.id = uid(); e.seq = m.seq = (m.seq || 1) + 1;
+  if (m.clock.phase === 'h1' || m.clock.phase === 'h2') e.ts = Date.now(); // hora real, para medir el tiempo en cada posición
   m.events.push(e);
   for (const k of ['scorer', 'assist', 'og', 'pid', 'out', 'in']) if (e[k]) delete m.ov[e[k]];
   if (e.t === 'rgoal' && !e.og && e.dorsal) { const p = rivalPlayer(m, e.dorsal); if (p) p.goals = (+p.goals || 0) + 1; }
@@ -1295,7 +1296,7 @@ const ACT = {
   mvSlot(el) { UI.sheet.slot = el.dataset.v; renderSheet(); },
   mvSave() { const m = cur(), s = UI.sheet; closeSheet(); addEvent(m, { t: 'move', pid: s.pid, slot: +s.slot, min: +s.min || 1, half: s.half }); },
   evEdit(el) { const m = cur(); const e = m.events.find(x => x.id === el.dataset.id); if (e) openSheet({ type: 'event', eid: e.id, min: e.min, half: e.half, desc: e.desc || '' }); },
-  evSave() { const m = cur(), s = UI.sheet; const e = m.events.find(x => x.id === s.eid); if (e) { e.min = +s.min || 1; e.half = s.half; e.desc = str(s.desc); } closeSheet(); touch(m); },
+  evSave() { const m = cur(), s = UI.sheet; const e = m.events.find(x => x.id === s.eid); if (e) { if (e.min !== (+s.min || 1) || e.half !== s.half) delete e.ts; e.min = +s.min || 1; e.half = s.half; e.desc = str(s.desc); } closeSheet(); touch(m); },
   evDel() { const m = cur(), s = UI.sheet; closeSheet(); removeEvent(m, s.eid); },
   minDec() { const s = UI.sheet; s.min = Math.max(1, (+s.min || 1) - 1); renderSheet(); },
   minInc() { const s = UI.sheet; s.min = (+s.min || 0) + 1; renderSheet(); },

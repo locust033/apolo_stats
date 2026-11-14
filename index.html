@@ -578,16 +578,23 @@ function clockMinute(clock, H, now = Date.now()) {
 function clockHalf(clock) { return clock.phase === 'h2' || clock.phase === 'end' ? 2 : 1; }
 function sortedEvents(m) { return [...m.events].sort((a, b) => a.half - b.half || a.min - b.min || a.seq - b.seq); }
 
+// Posición contabilizada: la jugadora tiene que estar al menos este tiempo en ella (evita huecos «fantasma» al reorganizar)
+const MIN_POS_MS = 30000;
 function compute(m, H, now = Date.now()) {
   const P = {};
   const called = m.roster.filter(p => m.called[p.id]).map(p => p.id);
-  for (const id of called) P[id] = { tit: false, sup: false, min: 0, pos: [], g: 0, a: 0, gp: 0, y: 0, r: 0, on: false, inAt: 0, out: false, expelled: false, leftAt: null };
+  for (const id of called) P[id] = { tit: false, sup: false, min: 0, stints: [], g: 0, a: 0, gp: 0, y: 0, r: 0, on: false, inAt: 0, out: false, expelled: false, leftAt: null };
   const field = {};
-  for (const [slot, id] of Object.entries(m.lineup)) if (P[id]) { field[slot] = id; P[id].tit = true; P[id].on = true; P[id].inAt = 0; P[id].pos.push(+slot); }
+  const kickTs = m.clock.h1Start || null;
+  // tramos en cada posición: {slot, ts, min, endTs, endMin}
+  const open = (id, slot, ts, min) => P[id].stints.push({ slot: +slot, ts: ts ?? null, min, endTs: undefined, endMin: undefined });
+  const close = (id, ts, min) => { const s = P[id] && P[id].stints[P[id].stints.length - 1]; if (s && s.endMin === undefined) { s.endTs = ts ?? null; s.endMin = min; } };
+  for (const [slot, id] of Object.entries(m.lineup)) if (P[id]) { field[slot] = id; P[id].tit = true; P[id].on = true; P[id].inAt = 0; open(id, slot, kickTs, 0); }
   for (const id of called) if (!P[id].tit) P[id].sup = true;
   const gf = [0, 0], gc = [0, 0];
   const slotOf = id => Object.keys(field).find(s => field[s] === id);
-  const leave = (id, at) => { const p = P[id]; if (!p || !p.on) return; p.min += Math.max(0, at - p.inAt); p.on = false; p.leftAt = at; const s = slotOf(id); if (s) delete field[s]; };
+  let curTs = null;
+  const leave = (id, at) => { const p = P[id]; if (!p || !p.on) return; p.min += Math.max(0, at - p.inAt); p.on = false; p.leftAt = at; close(id, curTs, at); const s = slotOf(id); if (s) delete field[s]; };
   const ph = m.clock.phase;
   const live = ph === 'h1' || ph === 'h2';
   // sin empezar el directo no hay minutos: se cuentan desde que se pulsa «Empezar 1ª parte»
@@ -595,6 +602,7 @@ function compute(m, H, now = Date.now()) {
   if (live || ph === 'ht') for (const e of m.events) end = Math.max(end, eff(e.min, e.half, H));
   for (const e of sortedEvents(m)) {
     const at = eff(e.min, e.half, H);
+    curTs = e.ts || null;
     if (e.t === 'goal') { gf[e.half - 1]++; if (P[e.scorer]) P[e.scorer].g++; if (P[e.assist]) P[e.assist].a++; }
     else if (e.t === 'rgoal') { gc[e.half - 1]++; if (P[e.og]) P[e.og].gp++; }
     else if (e.t === 'card' && P[e.pid]) {
@@ -606,26 +614,32 @@ function compute(m, H, now = Date.now()) {
       // cambios volantes: una jugadora que ya salió puede volver a entrar
       const s = slotOf(e.out); if (!s || P[e.in].on || P[e.in].expelled) continue;
       leave(e.out, at); P[e.out].out = true;
-      field[s] = e.in; P[e.in].on = true; P[e.in].inAt = at; P[e.in].pos.push(+s);
+      field[s] = e.in; P[e.in].on = true; P[e.in].inAt = at; open(e.in, s, curTs, at);
     }
     else if (e.t === 'out' && P[e.pid]) { leave(e.pid, at); P[e.pid].out = true; } // sale sin cambio (a respirar)
     else if (e.t === 'in' && P[e.pid]) { // entra a un hueco libre
       const s = String(e.slot); if (field[s] || P[e.pid].on || P[e.pid].expelled) continue;
-      field[s] = e.pid; P[e.pid].on = true; P[e.pid].inAt = at; P[e.pid].pos.push(+s);
+      field[s] = e.pid; P[e.pid].on = true; P[e.pid].inAt = at; open(e.pid, s, curTs, at);
     }
     else if (e.t === 'move' && P[e.pid]) {
       const from = slotOf(e.pid); if (!from || String(from) === String(e.slot)) continue;
       const other = field[e.slot];
-      field[e.slot] = e.pid; P[e.pid].pos.push(+e.slot);
-      if (other) { field[from] = other; P[other].pos.push(+from); } else delete field[from];
+      field[e.slot] = e.pid; close(e.pid, curTs, at); open(e.pid, e.slot, curTs, at);
+      if (other) { field[from] = other; close(other, curTs, at); open(other, from, curTs, at); } else delete field[from];
     }
   }
   const onField = { ...field };
-  for (const id of called) if (P[id].on) { P[id].min += Math.max(0, end - P[id].inAt); }
+  const endTs = ph === 'end' ? (m.clock.h2End || null) : live ? now : null;
+  for (const id of called) if (P[id].on) { P[id].min += Math.max(0, end - P[id].inAt); close(id, endTs, end); }
   for (const id of called) {
-    const p = P[id]; const d = [];
-    for (const s of p.pos) if (d[d.length - 1] !== s) d.push(s);
-    p.posStr = d.join(' ');
+    const p = P[id];
+    // duración de cada tramo: por la hora real si la hay; si no, por los minutos
+    const dur = s => (s.ts != null && s.endTs != null) ? s.endTs - s.ts : (s.endMin === undefined ? Infinity : (s.endMin - s.min) * 60000);
+    let keep = p.stints.filter(s => dur(s) >= MIN_POS_MS);
+    if (!keep.length && p.stints.length) keep = [p.stints.reduce((a, b) => (dur(b) > dur(a) ? b : a))];
+    const d = [];
+    for (const s of keep) if (!d.includes(s.slot)) d.push(s.slot); // sin repetir posiciones
+    p.pos = d; p.posStr = d.join(' ');
     p.ta = p.y; p.tr = p.r + (p.y >= 2 && p.r === 0 ? 1 : 0);
   }
   return { P, field: onField, gf, gc, end };
@@ -1159,6 +1173,7 @@ function rivalPlayer(m, dorsal, create = true) {
 function addEvent(m, e) {
   if (e.t === 'move') { const other = compute(m, H()).field[e.slot]; if (other) delete m.ov[other]; }
   e.id = uid(); e.seq = m.seq = (m.seq || 1) + 1;
+  if (m.clock.phase === 'h1' || m.clock.phase === 'h2') e.ts = Date.now(); // hora real, para medir el tiempo en cada posición
   m.events.push(e);
   for (const k of ['scorer', 'assist', 'og', 'pid', 'out', 'in']) if (e[k]) delete m.ov[e[k]];
   if (e.t === 'rgoal' && !e.og && e.dorsal) { const p = rivalPlayer(m, e.dorsal); if (p) p.goals = (+p.goals || 0) + 1; }
@@ -2013,7 +2028,7 @@ const ACT = {
   mvSlot(el) { UI.sheet.slot = el.dataset.v; renderSheet(); },
   mvSave() { const m = cur(), s = UI.sheet; closeSheet(); addEvent(m, { t: 'move', pid: s.pid, slot: +s.slot, min: +s.min || 1, half: s.half }); },
   evEdit(el) { const m = cur(); const e = m.events.find(x => x.id === el.dataset.id); if (e) openSheet({ type: 'event', eid: e.id, min: e.min, half: e.half, desc: e.desc || '' }); },
-  evSave() { const m = cur(), s = UI.sheet; const e = m.events.find(x => x.id === s.eid); if (e) { e.min = +s.min || 1; e.half = s.half; e.desc = str(s.desc); } closeSheet(); touch(m); },
+  evSave() { const m = cur(), s = UI.sheet; const e = m.events.find(x => x.id === s.eid); if (e) { if (e.min !== (+s.min || 1) || e.half !== s.half) delete e.ts; e.min = +s.min || 1; e.half = s.half; e.desc = str(s.desc); } closeSheet(); touch(m); },
   evDel() { const m = cur(), s = UI.sheet; closeSheet(); removeEvent(m, s.eid); },
   minDec() { const s = UI.sheet; s.min = Math.max(1, (+s.min || 1) - 1); renderSheet(); },
   minInc() { const s = UI.sheet; s.min = (+s.min || 0) + 1; renderSheet(); },
