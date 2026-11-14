@@ -1,5 +1,6 @@
 name: Avisos Apolo
-# Cada 10 minutos mira el Excel y manda los avisos al móvil (martes de horarios y día de partido).
+# Cada 10 minutos: manda los avisos al móvil (martes de horarios y día de partido)
+# y actualiza los datos de la federación en el Excel (cada 6 h, o cuando la app lo pide).
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -16,7 +17,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm install --no-save --no-audit --no-fund web-push@3
-      - run: node avisos/send.mjs
+      - name: Avisos
+        run: node avisos/send.mjs
+        continue-on-error: true
+        env:
+          GOOGLE_SA: ${{ secrets.GOOGLE_SA }}
+          SHEET_ID: 1NIOy0FJE7ZojeUCjoY0qkNdH0_nSJNEnHTcigUdzGY0
+      - name: Datos de la federación
+        run: node avisos/ffcv.mjs
+        continue-on-error: true
         env:
           GOOGLE_SA: ${{ secrets.GOOGLE_SA }}
           SHEET_ID: 1NIOy0FJE7ZojeUCjoY0qkNdH0_nSJNEnHTcigUdzGY0

@@ -149,12 +149,13 @@ async function writeVals(range, values) { return call('update_values', { range, 
 
 // ---- Datos de la federación, guardados en la pestaña oculta "FFCV" del Excel ----
 function parseFfcvRows(rows) {
-  const s = { at: '', clas: [], matches: [], sanc: [], teams: [] };
+  const s = { at: '', clas: [], matches: [], sanc: [], teams: [], cal: [] };
   for (const r of rows || []) {
     const k = r[0], v = r.slice(1);
     if (k === 'at') s.at = v[0];
     else if (k === 'C') s.clas.push([+v[0], str(v[1]), str(v[2]), +v[3], +v[4], +v[5], +v[6], +v[7], +v[8], +v[9], str(v[10])]);
     else if (k === 'M') s.matches.push([+v[0], str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), str(v[6])]);
+    else if (k === 'K') s.cal.push([+v[0], str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), str(v[6])]);
     else if (k === 'S') s.sanc.push([str(v[0]), str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), +v[6] || 0]);
     else if (k === 'T') s.teams.push({ cod: str(v[0]), name: str(v[1]), es: str(v[2]).split(',').filter(Boolean), pl: [] });
     else if (k === 'P') { const t = s.teams.find(x => x.cod === str(v[0])); if (t) t.pl.push([str(v[1]), str(v[2]), str(v[3]), ...v.slice(4, 12).map(x => +x || 0)]); }
@@ -717,7 +718,9 @@ const field = (label, inner, cls = '') => `<label class="fld ${cls}"><span>${lab
 const inp = (path, v, attrs = '') => `<input data-bind="${path}" value="${esc(v)}" ${attrs}>`;
 const nextBtn = (to, label) => `<button class="btn primary wide" data-act="step" data-v="${to}">${label}</button>`;
 
-const ffcvFor = m => { const f = FFCV[sheetShort(m.title).n - 1]; return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
+// Calendario del Apolo: el de la federación (pestaña FFCV, se actualiza solo) o, si no hay, el guardado en la app. Sin jornadas de descanso.
+const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c.length ? c : FFCV; };
+const ffcvFor = m => { const f = ffcvCal()[sheetShort(m.title).n - 1]; return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
 const awayOf = t => { const f = FFCV[sheetShort(t).n - 1]; return !!f && !/apolo/i.test(f[3]); };
 // convierte un marcador del Excel (local - visitante) a "nosotras - rival"
 const ourView = (s, away) => { const m = str(s).match(/(\d+)\s*-\s*(\d+)/); if (!m) return str(s); return away ? `${m[2]} - ${m[1]}` : `${m[1]} - ${m[2]}`; };
@@ -1098,7 +1101,7 @@ function teamResults(cod) {
 }
 const dmy = s => { const m = String(s).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
 function scoutView(forceCod = null, embedded = false) {
-  if (!FFCV_SNAP) return `<div class="card"><p class="muted">Todavía no hay datos de la federación. ${ready() ? 'Pídeme en el chat que los actualice.' : 'Entra con Google para cargarlos.'}</p></div>`;
+  if (!FFCV_SNAP) return `<div class="card"><p class="muted">Todavía no hay datos de la federación. ${ready() ? '<button class="link" data-act="ffcvSync">Pedir los datos</button>' : 'Entra con Google para cargarlos.'}</p></div>`;
   const cod = forceCod || (S.ui.scoutCod && FFCV_SNAP.clas.some(c => c[1] === S.ui.scoutCod) ? S.ui.scoutCod : defaultScoutCod());
   const t = FFCV_SNAP.clas.find(c => c[1] === cod); const team = FFCV_SNAP.teams.find(x => x.cod === cod) || { pl: [], es: [] };
   const isNext = cod === defaultScoutCod();
@@ -1124,7 +1127,7 @@ function scoutView(forceCod = null, embedded = false) {
   const row = (p, extra) => `<li><span class="disc sm">${esc(p.d)}</span><b>${esc(p.n)}</b>${p.pos ? `<small>${esc(p.pos)}</small>` : ''}<span class="sp"></span>${extra}</li>`;
   return `${chips}
   <div class="card">
-    <div class="eyebrow">${isNext ? 'Rival de esta jornada' : 'Equipo'} · datos FFCV del ${esc(new Date(FFCV_SNAP.at).toLocaleDateString('es-ES'))}</div>
+    <div class="eyebrow">${isNext ? 'Rival de esta jornada' : 'Equipo'} · ${ffcvAge()} <button class="link small" data-act="ffcvSync" ${UI.ffcvAsked ? 'disabled' : ''}>${UI.ffcvAsked ? 'Actualización pedida' : 'Actualizar'}</button></div>
     <h2 class="h">${esc(title(t[2]))}</h2>
     <div class="tiles"><div class="tile"><small>Posición</small><b>${t[0]}º</b></div><div class="tile"><small>Puntos</small><b>${t[9]}</b></div><div class="tile"><small>V-E-D</small><b>${t[4]}-${t[5]}-${t[6]}</b></div><div class="tile"><small>Goles</small><b>${t[7]}:${t[8]}</b></div></div>
     <div class="sumline"><span class="muted small">Racha</span>${t[10].split('').map(pill).join('')}<span class="sp"></span>${esTop ? `<span class="muted small">Sistema habitual <b>${esc(esTop[0])}</b> (${esTop[1]}/${team.es.length})</span>` : ''}</div>
@@ -1223,6 +1226,20 @@ async function avisosSaveCfg(msg) {
   try { avSet('martes', AV.cfg.martes || ''); avSet('antes', String(AV.cfg.antes || '2')); avSet('partido', AV.cfg.partido === '0' ? '0' : '1'); await avisosWrite(); AV.msg = msg || 'Guardado.'; }
   catch (e) { AV.msg = 'No se pudo guardar: ' + errText(e); }
   AV.busy = false; render();
+}
+
+// Datos de la federación: se actualizan solos cada 6 h (proceso de GitHub); este botón pide hacerlo ya
+function ffcvAge() {
+  if (!FFCV_SNAP || !FFCV_SNAP.at) return 'sin datos FFCV';
+  const d = new Date(FFCV_SNAP.at), h = (Date.now() - d) / 3600e3;
+  const t = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  return `datos FFCV ${h < 20 && d.getDate() === new Date().getDate() ? 'de hoy a las ' + t : 'del ' + d.toLocaleDateString('es-ES') + ' ' + t}`;
+}
+async function setAvisosKeyApp(key, val) {
+  await avisosEnsureSheet();
+  const rows = (await call('get_values', { range: `'AVISOS'!A1:B600` }, { read: true })).values || [];
+  const i = rows.findIndex(r => r[0] === key);
+  await writeVals(i >= 0 ? `'AVISOS'!A${i + 1}:B${i + 1}` : `'AVISOS'!A${rows.length + 1}:B${rows.length + 1}`, [[key, val]]);
 }
 
 // ===== HOJA INFERIOR (diálogos) =====
@@ -1483,6 +1500,12 @@ const ACT = {
       AV.subscribed = false; await avisosSaveCfg('Avisos desactivados en este móvil.'); } catch (e) { AV.msg = errText(e); render(); }
   },
   async avTest() { try { const reg = await navigator.serviceWorker.ready; await reg.showNotification('Apolo', { body: 'Así se verán los avisos.', icon: 'icons/icon-192.png', tag: 'test' }); } catch (e) { AV.msg = String(e.message || e); render(); } },
+  async ffcvSync() {
+    if (!ready()) return signIn('');
+    UI.ffcvAsked = true; render();
+    try { await setAvisosKeyApp('ffcv_sync', new Date().toISOString()); showToast('Pedido. En unos 10 minutos estarán los datos nuevos de la federación; vuelve a abrir la app para verlos.'); }
+    catch (e) { UI.ffcvAsked = false; showToast('No se pudo pedir: ' + errText(e)); }
+  },
   rpTag(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.tag = p.tag ? '' : 'Goleadora'; p.fed = false; touch(m); },
   rpPos(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.pos = p.pos === el.dataset.v ? '' : el.dataset.v; p.fed = false; touch(m); },
   rpAdd() { const m = cur(); m.rival.players.push({ name: '', dorsal: '', pos: '', goals: 0, y: 0, r: 0, tag: '', info: '', note: '', fed: false }); UI.rpEdit = m.rival.players.length - 1; touch(m); },

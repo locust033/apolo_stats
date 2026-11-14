@@ -5,28 +5,10 @@
 import crypto from 'node:crypto';
 import webpush from 'web-push';
 
-const SHEET_ID = process.env.SHEET_ID;
-const SA = JSON.parse(process.env.GOOGLE_SA || '{}');
+import { configured, api, q } from './lib.mjs';
 const TZ = 'Europe/Madrid';
 const APP_URL = process.env.APP_URL || 'https://locust033.github.io/apolo_stats/';
 const DRY = process.env.DRY === '1';
-
-const b64u = b => Buffer.from(b).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
-async function googleToken() {
-  const now = Math.floor(Date.now() / 1000);
-  const head = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const body = b64u(JSON.stringify({ iss: SA.client_email, scope: 'https://www.googleapis.com/auth/spreadsheets', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 }));
-  const sig = b64u(crypto.createSign('RSA-SHA256').update(`${head}.${body}`).sign(SA.private_key));
-  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${head}.${body}.${sig}` }) });
-  const j = await r.json(); if (!j.access_token) throw new Error('Google: ' + JSON.stringify(j)); return j.access_token;
-}
-let TOKEN;
-async function api(path, opt = {}) {
-  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}${path}`, { ...opt, headers: { Authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' } });
-  const j = await r.json(); if (!r.ok) throw new Error(`Sheets ${r.status}: ${JSON.stringify(j).slice(0, 300)}`); return j;
-}
-const q = t => `'${t.replace(/'/g, "''")}'`;
 
 // Hora de Madrid
 function madridParts(d = new Date()) {
@@ -46,8 +28,7 @@ const hhmm = t => `${String(Math.floor(((t % 1440) + 1440) % 1440 / 60)).padStar
 const titleCase = s => String(s).toLowerCase().replace(/(^|[\s.'-])(\p{L})/gu, (a, b, c) => b + c.toUpperCase()).replace(/(?<=\s)(De|Del|La|El|Los|Las|Y)(?=\s)/g, w => w.toLowerCase());
 
 async function main() {
-  if (!SA.client_email || !SA.private_key) { console.log('Falta el secreto GOOGLE_SA: los avisos aún no están configurados.'); return; }
-  TOKEN = await googleToken();
+  if (!configured()) { console.log('Falta el secreto GOOGLE_SA: los avisos aún no están configurados.'); return; }
   const meta = await api('?fields=sheets.properties(sheetId,title)');
   const sheets = meta.sheets.map(s => s.properties);
   if (!sheets.some(s => s.title === 'AVISOS')) { console.log('Sin pestaña AVISOS: activa los avisos desde la app.'); return; }
