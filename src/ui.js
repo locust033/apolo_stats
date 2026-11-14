@@ -148,11 +148,13 @@ async function initAuth() {
   if (!ready()) return;
   if (!sid()) { S.ui.tab = 'settings'; UI.err.auth = 'Pega el enlace de tu Google Sheet en Ajustes.'; render(); return; }
   await refreshSheets();
+  await loadStats(true);
   await loadFfcv();
   await importFfcvIfPending();
+  pickStartJornada();
   const m = cur();
-  if (!m || m.seed) await openMatch(S.current ?? S.sheets[0].id, { reload: !!(m && m.seed && !m.dirty) });
-  else render();
+  // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
+  await openMatch(S.current ?? S.sheets[0].id, { reload: !(m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) });
   if (resumeAfterLogin === 'save' && cur()) saveToSheet(cur());
 }
 async function refreshSheets() {
@@ -410,13 +412,27 @@ function navbar() {
   return `<nav class="bottom">${b('match', IC.match, 'Partido')}${b('stats', IC.stats, 'Estadísticas')}${b('settings', IC.gear, 'Ajustes')}</nav>`;
 }
 
+const resClass = sum => { if (!sum || !sum.final) return 'pending'; const [a, b] = sum.final; return a > b ? 'w' : a === b ? 'd' : 'l'; };
 function jornadaRail() {
-  return `<div class="rail" id="rail">${S.sheets.map(s => {
+  const curSh = sheetById(S.current); const cs = curSh ? sheetShort(curSh.title) : { n: '', name: '' };
+  const cSum = curSh && S.stats.sums[curSh.id];
+  const open = !!S.ui.railOpen;
+  const chev = `<svg viewBox="0 0 24 24" class="ic chev ${open ? 'up' : ''}"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const head = `<button class="railhead ${resClass(cSum)}" data-act="railToggle" aria-expanded="${open}"><b>J${cs.n}</b><span class="rn">${esc(title(cs.name))}</span>${cSum && cSum.final ? `<em>${cSum.final.join('-')}</em>` : ''}<span class="sp"></span><span class="rl">${open ? 'Ocultar' : 'Jornadas'}</span>${chev}</button>`;
+  if (!open) return `<div class="railwrap">${head}</div>`;
+  return `<div class="railwrap">${head}<div class="rail" id="rail">${S.sheets.map(s => {
     const sh = sheetShort(s.title), sum = S.stats.sums[s.id], lm = S.matches[s.id];
-    const st = lm && lm.dirty ? 'dirty' : (sum && sum.played) ? 'played' : '';
     const res = sum && sum.final ? `${sum.final[0]}-${sum.final[1]}` : '';
-    return `<button class="jchip ${String(S.current) === String(s.id) ? 'on' : ''} ${st}" data-act="openJ" data-id="${s.id}" id="j${s.id}"><b>J${sh.n}</b><span>${esc(title(sh.name))}</span>${res ? `<em>${res}</em>` : ''}</button>`;
-  }).join('')}</div>`;
+    return `<button class="jchip ${resClass(sum)} ${String(S.current) === String(s.id) ? 'on' : ''} ${lm && lm.dirty ? 'dirty' : ''}" data-act="openJ" data-id="${s.id}" id="j${s.id}"><b>J${sh.n}</b><span>${esc(title(sh.name))}</span>${res ? `<em>${res}</em>` : ''}</button>`;
+  }).join('')}</div></div>`;
+}
+// Al abrir la app: primera jornada sin resultado, salvo que haya un partido a medias en el móvil
+function pickStartJornada() {
+  const m = cur();
+  if (m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) return false;
+  const f = S.sheets.find(s => { const x = S.stats.sums[s.id]; return !x || !x.final; });
+  if (f && String(f.id) !== String(S.current)) { S.current = f.id; return true; }
+  return false;
 }
 function matchView(m) {
   if (!m) return jornadaRail() + `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
@@ -894,7 +910,8 @@ const ACT = {
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; persist(); render(); window.scrollTo(0, 0); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
-  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } UI.sync = null; openMatch(el.dataset.id); },
+  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  railToggle() { S.ui.railOpen = !S.ui.railOpen; persist(); render(); if (S.ui.railOpen) { const c = document.getElementById('j' + S.current); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); } },
   reloadJ() { openMatch(S.current, { reload: true }); },
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
   doReload() { closeSheet(); openMatch(S.current, { reload: true }); },
@@ -1058,6 +1075,7 @@ function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}
   if (S.stats.v !== 2) S.stats = { v: 2, at: 0, sums: {} };
   if (S.current == null) S.current = S.sheets[0].id;
+  pickStartJornada(); S.ui.railOpen = false;
   if (!S.matches[S.current]) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
   render();
   const chip = document.getElementById('j' + S.current); if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest' });

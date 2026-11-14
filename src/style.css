@@ -27,6 +27,8 @@ html, body { margin: 0; background: var(--paper); color: var(--ink); font-family
 body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; text-align: left; line-height: 1.25; }
+input::-webkit-date-and-time-value { text-align: left; margin: 0; }
 input, textarea, select { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px; padding: 11px 12px; width: 100%; min-height: 46px; }
 output.ro { display: flex; align-items: center; min-height: 46px; padding: 11px 12px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 5%, transparent); font-variant-numeric: tabular-nums; font-weight: 600; }
 textarea { resize: vertical; line-height: 1.45; }
@@ -59,9 +61,8 @@ textarea { resize: vertical; line-height: 1.45; }
 .jchip { flex: none; scroll-snap-align: center; display: grid; grid-template-columns: auto auto; column-gap: 6px; align-items: baseline; padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1.5px solid var(--line); text-align: left; position: relative; }
 .jchip b { font-family: var(--display); font-size: 19px; font-weight: 800; }
 .jchip span { font-size: 13px; font-weight: 600; color: var(--muted); max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jchip em { grid-column: 1 / -1; font-style: normal; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--good); font-weight: 700; }
-.jchip.on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
-.jchip.on span { color: color-mix(in srgb, var(--paper) 75%, transparent); }
+.jchip em { grid-column: 1 / -1; }
+
 .jchip.dirty::after { content: ""; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
 /* pasos */
@@ -307,3 +308,23 @@ nav.bottom button.on .ic { color: var(--accent); }
 .locked { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--good) 10%, var(--card)); border: 1.5px solid color-mix(in srgb, var(--good) 35%, var(--line)); }
 .locked b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locked .ic { color: var(--good); }
+
+/* selector de jornada plegable y colores suaves de resultado */
+:root { --win: color-mix(in srgb, var(--good) 13%, var(--card)); --draw: color-mix(in srgb, var(--yellow) 22%, var(--card)); --loss: color-mix(in srgb, var(--red) 12%, var(--card)); }
+.railwrap { padding: 10px 16px 0; display: grid; gap: 8px; }
+.railwrap .rail { padding: 2px 0 4px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+.railhead { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 12px; border-radius: 12px; background: var(--card); border: 1.5px solid var(--line); text-align: left; width: 100%; }
+.railhead b { font-family: var(--display); font-size: 21px; font-weight: 800; }
+.railhead .rn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.railhead em, .jchip em { font-style: normal; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+.railhead .sp { flex: 1; } .railhead .rl { font-size: 13px; font-weight: 600; color: var(--muted); }
+.chev { transition: transform .2s; } .chev.up { transform: rotate(180deg); }
+.jchip.w, .railhead.w { background: var(--win); border-color: color-mix(in srgb, var(--good) 35%, var(--line)); }
+.jchip.d, .railhead.d { background: var(--draw); border-color: color-mix(in srgb, var(--yellow) 55%, var(--line)); }
+.jchip.l, .railhead.l { background: var(--loss); border-color: color-mix(in srgb, var(--red) 35%, var(--line)); }
+.jchip.w em, .railhead.w em { color: var(--good); } .jchip.d em, .railhead.d em { color: color-mix(in srgb, var(--yellow) 45%, var(--ink)); } .jchip.l em, .railhead.l em { color: var(--red); }
+.jchip.pending { background: transparent; border-style: dashed; opacity: .6; }
+.jchip.pending b, .jchip.pending span { color: var(--muted); }
+.jchip.on, .jchip.on.pending { opacity: 1; color: var(--ink); background-color: inherit; box-shadow: 0 0 0 2.5px var(--ink) inset; }
+.jchip.on span { color: var(--muted); }
+.jchip.on.w { background: var(--win); } .jchip.on.d { background: var(--draw); } .jchip.on.l { background: var(--loss); } .jchip.on.pending { background: var(--card); border-style: solid; }
