@@ -96,6 +96,10 @@ function parseLayout(rows) {
   const cron = find(r => noacc(up(r[0])).startsWith('CRONICA 1'), total);
   const gh = find(r => up(r[0]) === 'MINUTO' && up(r[1]) === 'DORSAL', Math.max(total, cron));
   const obs = find(r => noacc(up(r[0])).startsWith('OBSERVACIONES'), total);
+  // POSITIVO / A MEJORAR: celdas combinadas bajo las observaciones, con la etiqueta delante del texto
+  const lab = (re, off) => { let i = obs >= 0 ? find(r => re.test(noacc(up(r[0]))), obs + 1) : -1; if (i < 0 && obs >= 0) i = obs + off; return i; };
+  const pos = lab(/^POSITIVO/, 5), mej = lab(/^A MEJORAR/, 7);
+  const stripLab = (t, re) => str(t).replace(re, '').trim();
   const val = find(r => noacc(up(r[0])).startsWith('VALORACION'), total);
   const valCols = {}, vals = {};
   if (val >= 0) {
@@ -117,7 +121,7 @@ function parseLayout(rows) {
   }
   return {
     hdr, total, players, hasCap: up(c(hdr,12)) === 'CAP',
-    sist, rh, plan, cron, gh, obs, val, valCols, vals,
+    sist, rh, plan, cron, gh, obs, pos, mej, val, valCols, vals,
     title: c(1,0), rival: c(4,0), team: c(13,0),
     lugar: c(7,3), fecha: c(8,3), hora: c(9,3), cit: c(10,3),
     h1: c(7,10), h2: c(8,10), final: c(10,10),
@@ -126,6 +130,7 @@ function parseLayout(rows) {
     rivalPlayers, goals,
     plan_t: plan >= 0 ? c(plan+1,0) : '', cron1: cron >= 0 ? c(cron+1,0) : '', cron2: cron >= 0 ? c(cron+1,4) : '',
     obs_t: obs >= 0 ? c(obs+1,0) : '',
+    pos_t: pos >= 0 ? stripLab(c(pos,0), /^\s*POSITIVO\s*:?\s*/i) : '', mej_t: mej >= 0 ? stripLab(c(mej,0), /^\s*A MEJORAR\s*:?\s*/i) : '',
   };
 }
 
@@ -144,7 +149,7 @@ function matchFromLayout(sheet, L) {
     rival: { name: L.rivalName || L.rival || '', formation: L.rivalForm || '',
       players: L.rivalPlayers.map(p => { const cc = parseCards(p.cards); return { name: p.name, dorsal: p.dorsal, pos: p.pos, goals: toInt(p.goals), y: cc.y, r: cc.r, note: p.note }; }) },
     clock: { phase: 'pre' }, events: [], mvp: {},
-    texts: { plan: L.plan_t, cron1: L.cron1, cron2: L.cron2, obs: L.obs_t },
+    texts: { plan: L.plan_t, cron1: L.cron1, cron2: L.cron2, obs: L.obs_t, pos: L.pos_t || '', mej: L.mej_t || '' },
     vals: { ...(L.vals || {}) },
     ov: {}, imp: null, savedAt: null, dirty: false, seq: 1,
   };

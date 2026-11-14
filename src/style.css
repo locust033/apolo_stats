@@ -379,3 +379,5 @@ nav.bottom button.on .ic { color: var(--accent); }
 .vals .vnums { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .vals .vn { min-height: 36px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--card); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; padding: 0; }
 .vals .vn.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.fedtag { align-self: flex-start; width: fit-content; margin: 2px 0; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; vertical-align: 1px; }
+.rprow.isfed { border-style: dashed; }

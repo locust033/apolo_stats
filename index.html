@@ -399,6 +399,8 @@ nav.bottom button.on .ic { color: var(--accent); }
 .vals .vnums { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .vals .vn { min-height: 36px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--card); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; padding: 0; }
 .vals .vn.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.fedtag { align-self: flex-start; width: fit-content; margin: 2px 0; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; vertical-align: 1px; }
+.rprow.isfed { border-style: dashed; }
 
 </style>
 </head>
@@ -504,6 +506,10 @@ function parseLayout(rows) {
   const cron = find(r => noacc(up(r[0])).startsWith('CRONICA 1'), total);
   const gh = find(r => up(r[0]) === 'MINUTO' && up(r[1]) === 'DORSAL', Math.max(total, cron));
   const obs = find(r => noacc(up(r[0])).startsWith('OBSERVACIONES'), total);
+  // POSITIVO / A MEJORAR: celdas combinadas bajo las observaciones, con la etiqueta delante del texto
+  const lab = (re, off) => { let i = obs >= 0 ? find(r => re.test(noacc(up(r[0]))), obs + 1) : -1; if (i < 0 && obs >= 0) i = obs + off; return i; };
+  const pos = lab(/^POSITIVO/, 5), mej = lab(/^A MEJORAR/, 7);
+  const stripLab = (t, re) => str(t).replace(re, '').trim();
   const val = find(r => noacc(up(r[0])).startsWith('VALORACION'), total);
   const valCols = {}, vals = {};
   if (val >= 0) {
@@ -525,7 +531,7 @@ function parseLayout(rows) {
   }
   return {
     hdr, total, players, hasCap: up(c(hdr,12)) === 'CAP',
-    sist, rh, plan, cron, gh, obs, val, valCols, vals,
+    sist, rh, plan, cron, gh, obs, pos, mej, val, valCols, vals,
     title: c(1,0), rival: c(4,0), team: c(13,0),
     lugar: c(7,3), fecha: c(8,3), hora: c(9,3), cit: c(10,3),
     h1: c(7,10), h2: c(8,10), final: c(10,10),
@@ -534,6 +540,7 @@ function parseLayout(rows) {
     rivalPlayers, goals,
     plan_t: plan >= 0 ? c(plan+1,0) : '', cron1: cron >= 0 ? c(cron+1,0) : '', cron2: cron >= 0 ? c(cron+1,4) : '',
     obs_t: obs >= 0 ? c(obs+1,0) : '',
+    pos_t: pos >= 0 ? stripLab(c(pos,0), /^\s*POSITIVO\s*:?\s*/i) : '', mej_t: mej >= 0 ? stripLab(c(mej,0), /^\s*A MEJORAR\s*:?\s*/i) : '',
   };
 }
 
@@ -552,7 +559,7 @@ function matchFromLayout(sheet, L) {
     rival: { name: L.rivalName || L.rival || '', formation: L.rivalForm || '',
       players: L.rivalPlayers.map(p => { const cc = parseCards(p.cards); return { name: p.name, dorsal: p.dorsal, pos: p.pos, goals: toInt(p.goals), y: cc.y, r: cc.r, note: p.note }; }) },
     clock: { phase: 'pre' }, events: [], mvp: {},
-    texts: { plan: L.plan_t, cron1: L.cron1, cron2: L.cron2, obs: L.obs_t },
+    texts: { plan: L.plan_t, cron1: L.cron1, cron2: L.cron2, obs: L.obs_t, pos: L.pos_t || '', mej: L.mej_t || '' },
     vals: { ...(L.vals || {}) },
     ov: {}, imp: null, savedAt: null, dirty: false, seq: 1,
   };
@@ -854,6 +861,17 @@ async function call(tool, input = {}, { read = false } = {}) {
 }
 const sid = () => { const v = str(S.settings.sid); const m = v.match(/\/d\/([a-zA-Z0-9_-]+)/); return m ? m[1] : v; };
 async function readRows(t) { const p = await call('get_values', { range: `${qs(t)}!A1:M140` }, { read: true }); return (p && p.values) || []; }
+// Celdas «POSITIVO: …» y «A MEJORAR: …» con la etiqueta en negrita
+function labelCells(shId, L, texts) {
+  const out = [];
+  for (const [row, label, txt] of [[L.pos, 'POSITIVO:', texts.pos], [L.mej, 'A MEJORAR:', texts.mej]]) {
+    if (row == null || row < 0) continue;
+    const t = str(txt); const v = t ? `${label} ${t}` : label;
+    const runs = [{ startIndex: 0, format: { bold: true } }]; if (t) runs.push({ startIndex: label.length, format: { bold: false } });
+    out.push({ updateCells: { start: { sheetId: shId, rowIndex: row, columnIndex: 0 }, rows: [{ values: [{ userEnteredValue: { stringValue: v }, textFormatRuns: runs }] }], fields: 'userEnteredValue,textFormatRuns' } });
+  }
+  return out;
+}
 // Fila de notas de VALORACIONES: rango y valores (null = casilla que no se toca)
 function valRow(L, get) {
   const cols = Object.entries(L.valCols || {}); if (L.val == null || L.val < 0 || !cols.length) return null;
@@ -952,6 +970,8 @@ function applyFfcv(m, force = false) {
 // Copias guardadas en el móvil por versiones anteriores de la app
 function migrateMatch(m) {
   if (!m.vals) m.vals = {};
+  if (m.texts.pos == null) m.texts.pos = ''; if (m.texts.mej == null) m.texts.mej = '';
+  markFed(m);
   if (m.finalized === undefined && m.imp && m.imp.score && m.imp.score.final && !m.events.length) m.finalized = true;
   // jornadas guardadas solo con convocatoria/once que una versión anterior tomó por jugadas
   if (!m.finalized && m.clock.phase === 'end' && !m.events.length && m.imp && !(m.imp.score && m.imp.score.final)
@@ -980,7 +1000,7 @@ async function openMatch(id, { reload = false } = {}) {
         const m = matchFromLayout(sh, L);
         // conserva extras añadidos en la app que aún no están en el Excel
         if (prev && !reload) for (const p of prev.roster) if (p.extra && !m.roster.some(q => q.id === p.id)) m.roster.push(p);
-        applyFfcv(m);
+        applyFfcv(m); markFed(m);
         S.matches[id] = m; S.stats.sums[id] = summarize(sh, L, awayOf(sh.title)); UI.err.match = null;
       } catch (e) { UI.err.match = errText(e); }
       UI.loading[id] = false; persist();
@@ -1007,14 +1027,11 @@ function ffcvRivalTeam(m) {
   const c = teamByName(/apolo/i.test(f.local) ? f.visit : f.local); if (!c) return null;
   return { clas: c, team: FFCV_SNAP.teams.find(x => x.cod === c[1]) || { pl: [], es: [] } };
 }
-// Rellena (solo si está vacío) el sistema más usado y las destacadas: goleadoras y jugadoras con tarjetas.
+// Destacadas de la federación: goleadoras y jugadoras con tarjetas. Se muestran como sugerencia (fed: true)
+// y NO se guardan en el Excel hasta que las modificas (nota, posición, goles, tarjetas…).
 // Goles y tarjetas de la ficha quedan a 0: son los de este partido; lo de la temporada va en la nota.
-function prefillRival(m) {
-  if (m.finalized || m.rival.players.length || str(m.rival.formation)) return false;
-  const r = ffcvRivalTeam(m); if (!r) return false;
-  const cnt = r.team.es.reduce((o, e) => (o[e] = (o[e] || 0) + 1, o), {});
-  const es = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
-  if (es) m.rival.formation = es[0].replace(/-/g, '.');
+const rpKey = p => str(p.dorsal) ? 'd' + str(p.dorsal) : 'n' + up(p.name);
+function ffcvPicks(r) {
   const P = r.team.pl.map(p => ({ n: p[0], d: p[1], pos: p[2], g: p[5], pen: p[6], y: p[8], rr: p[9] }));
   const picked = [];
   for (const p of P.filter(p => p.g > 0).sort((a, b) => b.g - a.g).slice(0, 4)) picked.push({ p, note: `Goleadora · ${p.g} gol${p.g > 1 ? 'es' : ''}${p.pen ? ` (${p.pen} pen.)` : ''}` });
@@ -1023,9 +1040,37 @@ function prefillRival(m) {
     const ex = picked.find(x => x.p === p); if (ex) ex.note += ' · ' + txt; else picked.push({ p, note: txt });
   }
   const posMap = { P: 'POR', MD: 'MC', MI: 'MC' };
-  m.rival.players = picked.slice(0, 8).map(({ p, note }) => ({ name: up(nameFmt(p.n)), dorsal: p.d, pos: posMap[p.pos] || p.pos || '', goals: 0, y: 0, r: 0, note }));
-  if (es || m.rival.players.length) m.dirty = true;
-  return true;
+  return picked.slice(0, 8).map(({ p, note }) => ({ name: up(nameFmt(p.n)), dorsal: p.d, pos: posMap[p.pos] || p.pos || '', goals: 0, y: 0, r: 0, note, fed: true }));
+}
+// Marca como «de la federación» las destacadas sin nada tuyo (copias antiguas o filas que ya estaban en el Excel)
+const AUTO_NOTE = /^(Goleadora · \d+ gol(es)?( \(\d+ pen\.\))?)?( · )?(\d+ amarillas?)?(, )?(\d+ rojas?)?$/;
+function markFed(m) {
+  const r = ffcvRivalTeam(m); const fp = r ? r.team.pl.map(p => ({ d: str(p[1]), n: up(nameFmt(p[0])) })) : [];
+  for (const p of m.rival.players) {
+    if (p.fed !== undefined) continue;
+    const blankStats = !(+p.goals) && !(+p.y) && !(+p.r);
+    const words = up(p.name).split(/\s+/).filter(w => w.length >= 4);
+    const inFfcv = fp.some(x => x.d === str(p.dorsal) && (x.n === up(p.name) || words.some(w => x.n.includes(w))));
+    p.fed = blankStats && inFfcv && AUTO_NOTE.test(str(p.note));
+  }
+}
+function prefillRival(m) {
+  if (m.finalized) return false;
+  const r = ffcvRivalTeam(m); if (!r) return false;
+  let changed = false;
+  if (!str(m.rival.formation)) {
+    const cnt = r.team.es.reduce((o, e) => (o[e] = (o[e] || 0) + 1, o), {});
+    const es = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (es) { m.rival.formation = es[0].replace(/-/g, '.'); m.dirty = true; changed = true; }
+  }
+  const hide = (S.rivalHide || {})[m.sheetId] || [];
+  const have = new Set(m.rival.players.map(rpKey));
+  for (const p of ffcvPicks(r)) {
+    if (m.rival.players.length >= 11) break;
+    const k = rpKey(p); if (have.has(k) || hide.includes(k)) continue;
+    m.rival.players.push(p); have.add(k); changed = true;
+  }
+  return changed;
 }
 
 // ===== GUARDAR EN EL EXCEL =====
@@ -1068,6 +1113,8 @@ async function saveToSheet(m) {
     }
     // CAP con casilla de verificación, igual que MVP
     fmtReq.push({ setDataValidation: { range: { sheetId: shId, startRowIndex: L.hdr + 1, endRowIndex: L.total, startColumnIndex: 12, endColumnIndex: 13 }, rule: { condition: { type: 'BOOLEAN' }, showCustomUi: true } } });
+    // POSITIVO / A MEJORAR: etiqueta en negrita + texto
+    fmtReq.push(...labelCells(shId, L, m.texts));
     if (fmtReq.length) await call('update_spreadsheet', { spreadsheetId: sid(), requests: fmtReq });
     await call('update_formulas', { spreadsheetId: sid(), range: `${qs(t)}!E${L.total + 1}`, formulas: [[`=SUM(E${L.hdr + 2}:E${L.total})`]] });
 
@@ -1091,7 +1138,7 @@ async function saveToSheet(m) {
       [`${qs(t)}!K8:K11`, [[sc.h1], [sc.h2], [null], [sc.final]]],
     ];
     if (L.rh >= 0) {
-      const rp = pad(m.rival.players.map(p => [p.name || '', toCell(p.dorsal), p.pos || '', p.goals ? p.goals : '', fmtCards(p.y, p.r), p.note || '']), 11, 6);
+      const rp = pad(m.rival.players.filter(p => !p.fed).map(p => [p.name || '', toCell(p.dorsal), p.pos || '', p.goals ? p.goals : '', fmtCards(p.y, p.r), p.note || '']), 11, 6);
       writes.push([`${qs(t)}!A${L.rh + 2}:F${L.rh + 12}`, rp]);
       writes.push([`${qs(t)}!H${L.rh + 13}:H${L.rh + 14}`, [[m.rival.name || m.info.rival || ''], [m.rival.formation || '']]]);
     }
@@ -1167,7 +1214,7 @@ async function wipeJornada(m) {
     const vr = valRow(L, () => ''); if (vr) writes.push([`${qs(t)}!${vr[0]}`, vr[1]]);
     if (L.gh >= 0) { writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, blank(11, 3)]); writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, blank(11, 4).map(r => [r[0], null, r[2], r[3]])]); }
     await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
-    try { await call('update_spreadsheet', { requests: resultColorReqs(m.sheetId, null) }); } catch (e) {}
+    try { await call('update_spreadsheet', { requests: [...labelCells(m.sheetId, L, {}), ...resultColorReqs(m.sheetId, null)] }); } catch (e) {}
     delete S.stats.sums[m.sheetId]; delete S.matches[m.sheetId];
     if (UI.editStats) delete UI.editStats[m.sheetId];
     UI.sync = 'ok'; UI.syncMsg = 'Jornada borrada';
@@ -1200,7 +1247,7 @@ async function loadStats(force = false) {
 // ===== EVENTOS DEL PARTIDO =====
 function rivalPlayer(m, dorsal, create = true) {
   let p = m.rival.players.find(x => str(x.dorsal) === str(dorsal) && str(dorsal) !== '');
-  if (!p && create && str(dorsal) && m.rival.players.length < 11) { p = { name: '', dorsal: str(dorsal), pos: '', goals: 0, y: 0, r: 0, note: '' }; m.rival.players.push(p); }
+  if (!p && create && str(dorsal) && m.rival.players.filter(x => !x.fed).length < 11) { p = { name: '', dorsal: str(dorsal), pos: '', goals: 0, y: 0, r: 0, note: '', fed: false }; m.rival.players.push(p); }
   return p;
 }
 function addEvent(m, e) {
@@ -1209,8 +1256,8 @@ function addEvent(m, e) {
   if (m.clock.phase === 'h1' || m.clock.phase === 'h2') e.ts = Date.now(); // hora real, para medir el tiempo en cada posición
   m.events.push(e);
   for (const k of ['scorer', 'assist', 'og', 'pid', 'out', 'in']) if (e[k]) delete m.ov[e[k]];
-  if (e.t === 'rgoal' && !e.og && e.dorsal) { const p = rivalPlayer(m, e.dorsal); if (p) p.goals = (+p.goals || 0) + 1; }
-  if (e.t === 'rcard') { const p = rivalPlayer(m, e.dorsal); if (p) { if (e.color === 'Y') p.y = (+p.y || 0) + 1; else p.r = (+p.r || 0) + 1; } }
+  if (e.t === 'rgoal' && !e.og && e.dorsal) { const p = rivalPlayer(m, e.dorsal); if (p) { p.goals = (+p.goals || 0) + 1; p.fed = false; } }
+  if (e.t === 'rcard') { const p = rivalPlayer(m, e.dorsal); if (p) { p.fed = false; if (e.color === 'Y') p.y = (+p.y || 0) + 1; else p.r = (+p.r || 0) + 1; } }
   touch(m);
 }
 function removeEvent(m, id) {
@@ -1451,15 +1498,15 @@ function rivalView(m, live = false) {
   const fr = live ? null : ffcvRivalTeam(m);
   const fed = fr ? `<details class="fedinfo" ${UI.fedClosed ? '' : 'open'}><summary data-act="fedToggle">Lo que dice la federación de ${esc(title(fr.clas[2]))}</summary>${scoutView(fr.clas[1], true)}</details>` : '';
   return `${live ? '' : lockBar(m)}${fed}
-    ${live ? '' : '<h3 class="h3">Tus notas del rival</h3><p class="muted small">El sistema y las destacadas vienen de la federación; cámbialos o añade notas (rápida, técnica, juego aéreo…). En el Directo, «Apuntar rival» te deja seguir apuntando.</p>'}
+    ${live ? '' : '<h3 class="h3">Tus notas del rival</h3><p class="muted small">El sistema viene de la federación. Las destacadas marcadas «Federación» son solo una sugerencia: no se guardan en el Excel hasta que las modificas (nota, posición, goles, tarjetas…). En el Directo, «Apuntar rival» te deja seguir apuntando.</p>'}
     <div class="card">${field('Nombre del rival', inp('rival.name', m.rival.name || m.info.rival))}
     ${field('Sistema del rival', inp('rival.formation', m.rival.formation, 'placeholder="p. ej. 1.4.4.2 - 1.4.2.4."'))}
     <div class="chips">${forms.map(f => `<button class="chip ${rivalForms(m).some(x => normF(x) === normF(f)) ? 'on' : ''}" data-act="rivalForm" data-v="${f}">${f}</button>`).join('')}</div>
     <p class="muted small">Toca un sistema para añadirlo y otra vez para quitarlo. Puedes marcar varios si cambian durante el partido.</p></div>
-    <h3 class="h3">Jugadoras destacadas <span class="muted">${m.rival.players.length}/11</span></h3>
-    ${m.rival.players.map((p, i) => UI.rpEdit !== i ? `<div class="card rprow">
+    <h3 class="h3">Jugadoras destacadas <span class="muted">${m.rival.players.filter(p => !p.fed).length}/11</span></h3>
+    ${m.rival.players.map((p, i) => UI.rpEdit !== i ? `<div class="card rprow ${p.fed ? 'isfed' : ''}">
       <span class="disc sm">${esc(p.dorsal || '?')}</span>
-      <div class="rpi"><b>${esc(title(p.name) || 'Sin nombre')}</b>${p.pos ? ` <small>${esc(p.pos)}</small>` : ''}${p.note ? `<em>${esc(p.note)}</em>` : ''}</div>
+      <div class="rpi"><b>${esc(title(p.name) || 'Sin nombre')}</b>${p.pos ? ` <small>${esc(p.pos)}</small>` : ''}${p.fed ? ' <i class="fedtag">Federación</i>' : ''}${p.note ? `<em>${esc(p.note)}</em>` : ''}</div>
       ${p.goals ? `<span class="tc">${IC.ball}${p.goals}</span>` : ''}${p.y ? `<span class="tc">${IC.card('Y')}${p.y}</span>` : ''}${p.r ? `<span class="tc">${IC.card('R')}${p.r}</span>` : ''}
       <button class="btn ghost sm" data-act="rpEdit" data-i="${i}">Modificar</button></div>` : `<div class="card rp">
       <div class="row2b">${field('Nombre', inp(`rival.players.${i}.name`, p.name, 'autocapitalize="characters"'))}${field('Dorsal', inp(`rival.players.${i}.dorsal`, p.dorsal, 'inputmode="numeric"'), 'narrow')}</div>
@@ -1467,7 +1514,7 @@ function rivalView(m, live = false) {
       <div class="row3">${field('Goles', inp(`rival.players.${i}.goals`, p.goals || '', 'type="number" min="0" inputmode="numeric" ' + ro))}${field('Amarillas', inp(`rival.players.${i}.y`, p.y || '', 'type="number" min="0" inputmode="numeric" ' + ro))}${field('Rojas', inp(`rival.players.${i}.r`, p.r || '', 'type="number" min="0" inputmode="numeric" ' + ro))}</div>
       ${field('A destacar', inp(`rival.players.${i}.note`, p.note, 'placeholder="Goleadora, rápida, juego aéreo…"'))}
       <div class="acts"><button class="btn primary" data-act="rpDone">Hecho</button><button class="btn danger" data-act="rpDel" data-i="${i}">Quitar</button></div></div>`).join('')}
-    ${m.rival.players.length < 11 ? `<button class="btn wide" data-act="rpAdd">+ Añadir jugadora rival</button>` : ''}
+    ${m.rival.players.filter(p => !p.fed).length < 11 ? `<button class="btn wide" data-act="rpAdd">+ Añadir jugadora rival</button>` : ''}
     ${live ? '' : nextBtn('directo', 'Ir al directo')}`;
 }
 
@@ -1567,11 +1614,13 @@ function summaryView(m) {
       <h3 class="h3">Capitana</h3><div class="chips">${rows.map(p => `<button class="chip ${m.captain === p.id ? 'on' : ''}" data-act="setCapSum" data-id="${esc(p.id)}">${esc(title(p.name))}</button>`).join('')}</div>` : ''}
     <div class="card"><div class="eyebrow">Goles</div>
       ${gr.ours.length || gr.theirs.length ? `<ul class="glist">${gr.ours.map(r => `<li class="us"><b>${esc(r[0])}'</b><span>${esc(rows.find(p => str(p.dorsal) === str(r[1]))?.name ? title(rows.find(p => str(p.dorsal) === str(r[1])).name) : (r[1] ? '#' + r[1] : 'Gol'))}</span><small>${esc(r[2] || '')}</small></li>`).join('')}${gr.theirs.map(r => `<li class="them"><b>${esc(r[0])}'</b><span>Rival${r[1] ? ' #' + esc(r[1]) : ''}</span><small>${esc(r[2] || '')}</small></li>`).join('')}</ul>` : '<p class="muted small">Sin goles apuntados.</p>'}</div>
-    ${m.rival.players.length ? `<div class="card scout"><div class="eyebrow">Rival · jugadoras destacadas</div><ul class="scoutlist">${m.rival.players.map(p => `<li><span class="disc sm">${esc(p.dorsal)}</span><b>${esc(title(p.name))}</b> <small>${esc(p.pos)}</small> ${p.goals ? `<small>${p.goals} gol</small>` : ''} ${fmtCards(p.y, p.r) ? `<small>${fmtCards(p.y, p.r)}</small>` : ''} <em>${esc(p.note)}</em></li>`).join('')}</ul></div>` : ''}
+    ${m.rival.players.some(p => !p.fed) ? `<div class="card scout"><div class="eyebrow">Rival · jugadoras destacadas</div><ul class="scoutlist">${m.rival.players.filter(p => !p.fed).map(p => `<li><span class="disc sm">${esc(p.dorsal)}</span><b>${esc(title(p.name))}</b> <small>${esc(p.pos)}</small> ${p.goals ? `<small>${p.goals} gol</small>` : ''} ${fmtCards(p.y, p.r) ? `<small>${fmtCards(p.y, p.r)}</small>` : ''} <em>${esc(p.note)}</em></li>`).join('')}</ul></div>` : ''}
     <div class="card">${field('Planteamiento del partido', `<textarea data-bind="texts.plan" rows="4">${esc(m.texts.plan)}</textarea>`)}
       ${field('Crónica 1ª parte', `<textarea data-bind="texts.cron1" rows="5">${esc(m.texts.cron1)}</textarea>`)}
       ${field('Crónica 2ª parte', `<textarea data-bind="texts.cron2" rows="5">${esc(m.texts.cron2)}</textarea>`)}
-      ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}</div>
+      ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}
+      ${field('Positivo', `<textarea data-bind="texts.pos" rows="3" placeholder="Garra, ABP, desplazamientos largos…">${esc(m.texts.pos)}</textarea>`)}
+      ${field('A mejorar', `<textarea data-bind="texts.mej" rows="3" placeholder="Concentración, combinaciones en corto…">${esc(m.texts.mej)}</textarea>`)}</div>
     ${valsCard(m)}
     <button class="btn primary wide big" data-act="save" ${UI.sync === 'saving' ? 'disabled' : ''}>${UI.sync === 'saving' ? esc(UI.syncMsg) : 'Guardar en el Excel'}</button>
     <button class="link" data-act="askReopen">Reabrir la jornada (convocatoria, once y directo)</button>`;
@@ -1601,7 +1650,9 @@ function cierreView(m) {
     <div class="chips">${(played.length ? played : rows).map(p => `<button class="chip ${m.mvp[p.id] ? 'on' : ''}" data-act="mvp" data-id="${esc(p.id)}">${m.mvp[p.id] ? IC.star : ''}${esc(title(p.name))}</button>`).join('')}</div>
     <div class="card">${field('Crónica 1ª parte', `<textarea data-bind="texts.cron1" rows="5">${esc(m.texts.cron1)}</textarea>`)}
       ${field('Crónica 2ª parte', `<textarea data-bind="texts.cron2" rows="5">${esc(m.texts.cron2)}</textarea>`)}
-      ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}</div>
+      ${field('Observaciones generales', `<textarea data-bind="texts.obs" rows="4">${esc(m.texts.obs)}</textarea>`)}
+      ${field('Positivo', `<textarea data-bind="texts.pos" rows="3" placeholder="Garra, ABP, desplazamientos largos…">${esc(m.texts.pos)}</textarea>`)}
+      ${field('A mejorar', `<textarea data-bind="texts.mej" rows="3" placeholder="Concentración, combinaciones en corto…">${esc(m.texts.mej)}</textarea>`)}</div>
     ${valsCard(m)}
     <h3 class="h3">Repaso antes de guardar</h3>
     <p class="muted small">Calculado con los eventos del directo. Puedes corregir cualquier casilla; lo corregido sale marcado.</p>
@@ -1902,7 +1953,7 @@ const ACT = {
   askWipeJ() {
     const m = cur();
     openSheet({ type: 'confirm', title: 'Borrar datos de la jornada',
-      text: `Vas a borrar <b>todos los datos</b> de la hoja <b>«${esc(m.title)}»</b> del Excel: resultado, lugar, fecha y horas, convocatoria, titulares, minutos, posiciones, goles, asistencias, tarjetas, MVP, capitana, rival, sistemas, planteamiento, crónicas, goles, observaciones y valoraciones. Se mantienen los nombres y dorsales de la plantilla y el formato. <b>No se puede deshacer.</b>`,
+      text: `Vas a borrar <b>todos los datos</b> de la hoja <b>«${esc(m.title)}»</b> del Excel: resultado, lugar, fecha y horas, convocatoria, titulares, minutos, posiciones, goles, asistencias, tarjetas, MVP, capitana, rival, sistemas, planteamiento, crónicas, goles, observaciones, positivo, a mejorar y valoraciones. Se mantienen los nombres y dorsales de la plantilla y el formato. <b>No se puede deshacer.</b>`,
       ok: 'Sí, borrar la jornada', act: 'doWipeJ' });
   },
   doWipeJ() { const m = cur(); closeSheet(); wipeJornada(m); },
@@ -1966,9 +2017,9 @@ const ACT = {
   },
   rpEdit(el) { UI.rpEdit = +el.dataset.i; render(); },
   rpDone() { UI.rpEdit = null; render(); },
-  rpPos(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.pos = p.pos === el.dataset.v ? '' : el.dataset.v; touch(m); },
-  rpAdd() { const m = cur(); m.rival.players.push({ name: '', dorsal: '', pos: '', goals: 0, y: 0, r: 0, note: '' }); UI.rpEdit = m.rival.players.length - 1; touch(m); },
-  rpDel(el) { const m = cur(); m.rival.players.splice(+el.dataset.i, 1); UI.rpEdit = null; touch(m); },
+  rpPos(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.pos = p.pos === el.dataset.v ? '' : el.dataset.v; p.fed = false; touch(m); },
+  rpAdd() { const m = cur(); m.rival.players.push({ name: '', dorsal: '', pos: '', goals: 0, y: 0, r: 0, note: '', fed: false }); UI.rpEdit = m.rival.players.length - 1; touch(m); },
+  rpDel(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; if (p && p.fed) { S.rivalHide = S.rivalHide || {}; const h = S.rivalHide[m.sheetId] = S.rivalHide[m.sheetId] || []; if (!h.includes(rpKey(p))) h.push(rpKey(p)); } m.rival.players.splice(+el.dataset.i, 1); UI.rpEdit = null; touch(m); },
   // directo
   phase() { const m = cur(); const c = m.clock, now = Date.now();
     if (c.phase === 'pre') { c.phase = 'h1'; c.h1Start = now; if (m.imp && !m.events.length) { m.imp = null; m.ov = {}; }
@@ -2107,6 +2158,7 @@ document.addEventListener('input', ev => {
     if (/\.(goals|y|r)$/.test(path)) v = toInt(v);
     if (path === 'rival.name') m.info.rival = m.info.rival || v;
     setPath(m, path, v);
+    { const mm = path.match(/^rival\.players\.(\d+)\./); if (mm && m.rival.players[+mm[1]]) m.rival.players[+mm[1]].fed = false; }
     if (path === 'info.hora') { m.info.cit = citOf(v) || m.info.cit; const o = document.getElementById('citOut'); if (o) o.textContent = m.info.cit || '—'; }
     m.dirty = true; persist();
     const chip = document.querySelector('.top .sync'); if (chip && mcpState !== 'none' && !chip.classList.contains('dirty') && UI.sync !== 'saving') chip.outerHTML = '<button class="sync dirty" data-act="save">Guardar en Excel</button>';
