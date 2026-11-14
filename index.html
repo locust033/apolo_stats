@@ -1064,6 +1064,12 @@ async function saveToSheet(m) {
     for (let i = 0; i < writes.length; i += 4) {
       await Promise.all(writes.slice(i, i + 4).map(([r, v]) => writeVals(r, v).then(() => { done++; step(`Guardando (${done}/${writes.length})…`); })));
     }
+    // colorear el resultado final (K11:L11) y la pestaña: verde victoria, amarillo empate, rojo derrota
+    const fin = ourView(sc.final, awayOf(t)).match(/(\d+)\s*-\s*(\d+)/);
+    if (fin) {
+      const r = +fin[1] > +fin[2] ? 'w' : +fin[1] === +fin[2] ? 'd' : 'l';
+      try { await call('update_spreadsheet', { requests: resultColorReqs(shId, r) }); } catch (e) {}
+    }
     // refrescar resumen de estadísticas de esta hoja
     try { const rows2 = await readRows(t); S.stats.sums[m.sheetId] = summarize(sheetById(m.sheetId) || { id: m.sheetId, title: t }, parseLayout(rows2), awayOf(t)); } catch (e) {}
     for (const p of m.roster) if (p.extra && !S.extrasPool.some(x => up(x.name) === up(p.name))) S.extrasPool.push({ name: p.name, dorsal: p.dorsal });
@@ -1077,6 +1083,21 @@ async function saveToSheet(m) {
       : errText(e);
   }
   render();
+}
+
+// Colores de resultado, los mismos que ya usas en el Excel
+const RES_COLORS = {
+  w: { cell: { red: 0.7137255, green: 0.84313726, blue: 0.65882355 }, tab: { red: 0.7137255, green: 0.84313726, blue: 0.65882355 } },
+  d: { cell: { red: 1, green: 0.8980392, blue: 0.6 }, tab: { red: 1, green: 0.8980392, blue: 0.6 } },
+  l: { cell: { red: 0.91764706, green: 0.6, blue: 0.6 }, tab: { red: 0.8784314, green: 0.4, blue: 0.4 } },
+};
+function resultColorReqs(sheetId, r) {
+  const c = r ? RES_COLORS[r] : null;
+  return [
+    { repeatCell: { range: { sheetId, startRowIndex: 10, endRowIndex: 11, startColumnIndex: 10, endColumnIndex: 12 },
+      cell: { userEnteredFormat: { backgroundColorStyle: c ? { rgbColor: c.cell } : { themeColor: 'BACKGROUND' } } }, fields: 'userEnteredFormat.backgroundColorStyle' } },
+    { updateSheetProperties: { properties: { sheetId, tabColorStyle: { rgbColor: c ? c.tab : { red: 0.8, green: 0.8, blue: 0.8 } } }, fields: 'tabColorStyle' } },
+  ];
 }
 
 // ===== BORRAR UNA JORNADA DEL EXCEL =====
@@ -1099,6 +1120,7 @@ async function wipeJornada(m) {
     if (L.obs >= 0) writes.push([`${qs(t)}!A${L.obs + 2}`, [['']]]);
     if (L.gh >= 0) { writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, blank(11, 3)]); writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, blank(11, 4).map(r => [r[0], null, r[2], r[3]])]); }
     await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
+    try { await call('update_spreadsheet', { requests: resultColorReqs(m.sheetId, null) }); } catch (e) {}
     delete S.stats.sums[m.sheetId]; delete S.matches[m.sheetId];
     if (UI.editStats) delete UI.editStats[m.sheetId];
     UI.sync = 'ok'; UI.syncMsg = 'Jornada borrada';
