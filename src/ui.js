@@ -707,7 +707,8 @@ function liveView(m) {
     ${S.ui.liveSide === 'rival' ? rivalLive(m) : `
     ${nTit < 11 ? `<div class="banner">Faltan titulares (${nTit}/11). Puedes completarlo en <button class="link" data-act="step" data-v="once">Once</button>.</div>` : ''}
     ${imported ? `<div class="banner">Este partido ya estaba en el Excel. Si apuntas un gol nuevo, el marcador se recalcula solo con los goles apuntados aquí.</div>` : ''}
-    <div class="quick"><button class="btn goal" data-act="goalStart">${IC.ball} Gol nuestro</button><button class="btn rgoal" data-act="rgoalStart">${IC.ball} Gol rival</button><button class="btn" data-act="rcardStart">${IC.card('Y')} Tarjeta rival</button></div>
+    <div class="quick two"><button class="btn rgoal" data-act="rgoalStart">${IC.ball} Gol rival</button><button class="btn" data-act="rcardStart">${IC.card('Y')} Tarjeta rival</button></div>
+    <p class="muted small hint">Para un gol nuestro, toca a la goleadora en el campo.</p>
     ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale${Object.keys(comp.field).length < 11 ? ' o un hueco libre' : ''}</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
     <div class="${UI.pickIn ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
     <div class="formline"><span class="muted small">${Object.keys(comp.field).length < 11 && m.clock.phase !== 'pre' ? `<b class="short">${Object.keys(comp.field).length} en el campo</b> · ` : ''}Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
@@ -1003,6 +1004,18 @@ function renderSheet() {
         body = minuteField(s) + `<label class="fld"><span>Cómo fue (opcional)</span><input data-sbind="desc" value="${esc(s.desc || '')}" placeholder="falta lejana, córner, contra…"></label><button class="btn primary wide" data-act="gSave">Apuntar gol</button>`; }
       break;
     }
+    case 'rgoalEdit': {
+      h = `Gol rival apuntado · ${fmtMin(s.min, s.half, H())}'`;
+      const known = m.rival.players.filter(p => str(p.dorsal));
+      body = `<p class="muted small">Ya está guardado con el minuto del directo. Si quieres, añade quién lo marcó; si no, cierra.</p>
+        <label class="fld"><span>Dorsal de la goleadora (opcional)</span><input data-sbind="dorsal" inputmode="numeric" value="${esc(s.dorsal || '')}" placeholder="No lo sé"></label>
+        ${known.length ? `<div class="chips">${known.map(p => `<button class="chip ${str(s.dorsal) === str(p.dorsal) ? 'on' : ''}" data-act="rgDorsal" data-v="${esc(p.dorsal)}">${esc(p.dorsal)} ${esc(title(p.name))}</button>`).join('')}</div>` : ''}
+        <div class="chips"><button class="chip ${s.og ? 'on' : ''}" data-act="rgOgToggle">Fue en propia nuestra</button></div>
+        ${s.og !== undefined && s.og !== null ? plist(m, onField, 'rgOg') + (s.og ? `<p class="small">En propia de <b>${n(s.og)}</b></p>` : '') : ''}
+        ${minuteField(s)}<label class="fld"><span>Cómo fue (opcional)</span><input data-sbind="desc" value="${esc(s.desc || '')}" placeholder="balón largo, córner…"></label>
+        <div class="acts"><button class="btn primary" data-act="rgeSave">Guardar detalles</button><button class="btn danger" data-act="rgeDel">Borrar gol</button></div>`;
+      break;
+    }
     case 'rgoal': {
       h = 'Gol del rival';
       const known = m.rival.players.filter(p => str(p.dorsal));
@@ -1205,8 +1218,29 @@ const ACT = {
   gScorer(el) { UI.sheet.scorer = el.dataset.id || null; UI.sheet.step = 'assist'; renderSheet(); },
   gAssist(el) { UI.sheet.assist = el.dataset.id || null; UI.sheet.step = 'confirm'; renderSheet(); },
   gSave() { const m = cur(), s = UI.sheet; closeSheet(); addEvent(m, { t: 'goal', scorer: s.scorer || null, assist: s.assist || null, min: +s.min || 1, half: s.half, desc: str(s.desc) }); },
-  rgoalStart() { const m = cur(); openSheet({ type: 'rgoal', og: null, ...nowMinute(m) }); },
-  ogFrom() { const m = cur(); openSheet({ type: 'rgoal', og: UI.sheet.pid, ...nowMinute(m) }); },
+  // Gol rival: se apunta al momento con el minuto del directo; dorsal y detalles son opcionales
+  rgoalStart() {
+    const m = cur(); addEvent(m, { t: 'rgoal', dorsal: '', og: null, desc: '', ...nowMinute(m) });
+    const e = m.events[m.events.length - 1];
+    openSheet({ type: 'rgoalEdit', eid: e.id, dorsal: '', og: null, desc: '', min: e.min, half: e.half });
+  },
+  ogFrom() {
+    const m = cur(); const pid = UI.sheet.pid; addEvent(m, { t: 'rgoal', dorsal: '', og: pid, desc: '', ...nowMinute(m) });
+    const e = m.events[m.events.length - 1];
+    openSheet({ type: 'rgoalEdit', eid: e.id, dorsal: '', og: pid, desc: '', min: e.min, half: e.half });
+  },
+  rgeSave() {
+    const m = cur(), s = UI.sheet; const e = m.events.find(x => x.id === s.eid); closeSheet(); if (!e) return;
+    const oldD = !e.og ? str(e.dorsal) : '', newD = !s.og ? str(s.dorsal) : '';
+    if (oldD !== newD) {
+      if (oldD) { const p = rivalPlayer(m, oldD, false); if (p) p.goals = Math.max(0, (+p.goals || 0) - 1); }
+      if (newD) { const p = rivalPlayer(m, newD); if (p) p.goals = (+p.goals || 0) + 1; }
+    }
+    if (e.og) delete m.ov[e.og]; if (s.og) delete m.ov[s.og];
+    Object.assign(e, { dorsal: newD, og: s.og || null, desc: str(s.desc), min: +s.min || e.min, half: s.half });
+    touch(m); showToast(`Gol rival apuntado (${fmtMin(e.min, e.half, H())}')`);
+  },
+  rgeDel() { const m = cur(), s = UI.sheet; closeSheet(); removeEvent(m, s.eid); showToast('Gol rival borrado'); },
   rgDorsal(el) { UI.sheet.dorsal = el.dataset.v; renderSheet(); },
   rgOgToggle() { const s = UI.sheet; s.og = (s.og === null || s.og === undefined) ? '' : null; renderSheet(); },
   rgOg(el) { UI.sheet.og = el.dataset.id; renderSheet(); },

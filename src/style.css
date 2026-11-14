@@ -361,3 +361,6 @@ nav.bottom button.on .ic { color: var(--accent); }
 .stephead b { font-weight: 700; }
 .stephead .sp { flex: 1; } .stephead .rl { font-size: 13px; font-weight: 600; color: var(--muted); }
 .board .resetlink { color: var(--paper); opacity: .6; font-size: 13px; justify-self: center; }
+
+.quick.two { grid-template-columns: 1fr 1fr; }
+.hint { margin: -6px 0 0; text-align: center; }
