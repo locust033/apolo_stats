@@ -1892,13 +1892,15 @@ function teamStats(A) {
     <div class="card"><div class="eyebrow">Asistentes</div>${top('a').length ? bars(top('a').map(p => ({ l: title(p.name), v: p.a }))) : '<p class="muted small">Sin asistencias apuntadas.</p>'}</div>`;
 }
 function playersStats(A) {
-  const cols = [['name', 'Jugadora'], ['conv', 'Conv'], ['pj', 'PJ'], ['tit', 'Tit'], ['min', 'Min'], ['g', 'G'], ['a', 'A'], ['mvp', 'MVP'], ['ta', 'TA'], ['tr', 'TR']];
+  const cols = [['name', 'Jugadora'], ['conv', 'Conv'], ['pj', 'PJ'], ['tit', 'Tit'], ['min', 'Min'], ['mconv', 'Min/conv'], ['g', 'G'], ['a', 'A'], ['mvp', 'MVP'], ['ta', 'TA'], ['tr', 'TR']];
   const k = S.ui.sort, d = S.ui.dir;
-  const list = [...A.players].sort((a, b) => ((k === 'name' ? a.name.localeCompare(b.name) : a[k] - b[k]) * (d < 0 ? -1 : 1)) || a.name.localeCompare(b.name));
+  const full = 2 * H();
+  // minutos sobre los que podía jugar: solo partidos en los que estuvo convocada
+  const list = A.players.map(p => ({ ...p, mconv: p.conv ? p.min / (p.conv * full) : 0 })).sort((a, b) => ((k === 'name' ? a.name.localeCompare(b.name) : a[k] - b[k]) * (d < 0 ? -1 : 1)) || a.name.localeCompare(b.name));
   const maxMin = A.games.length * 2 * H();
-  return `<p class="muted small">Toca una cabecera para ordenar y una jugadora para ver su detalle.</p>
+  return `<p class="muted small">Toca una cabecera para ordenar y una jugadora para ver su detalle. <b>Min</b>: minutos totales (y % de todos los partidos). <b>Min/conv</b>: media de minutos por partido en el que estuvo convocada (y % de los minutos que pudo jugar).</p>
     <div class="tablewrap"><table class="stats"><thead><tr>${cols.map(([c, l]) => `<th><button data-act="sort" data-v="${c}" class="${k === c ? 'on' : ''}">${l}${k === c ? (d < 0 ? ' ↓' : ' ↑') : ''}</button></th>`).join('')}</tr></thead>
-    <tbody>${list.map(p => `<tr data-act="pdetail" data-key="${esc(p.key)}"><th><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}</th><td>${p.conv}</td><td>${p.pj}</td><td>${p.tit}</td><td>${p.min || '—'}${p.min ? `<span class="pct">${Math.round(p.min / maxMin * 100)}%</span>` : ''}</td><td>${p.g || ''}</td><td>${p.a || ''}</td><td>${p.mvp || ''}</td><td>${p.ta || ''}</td><td>${p.tr || ''}</td></tr>`).join('')}</tbody></table></div>`;
+    <tbody>${list.map(p => `<tr data-act="pdetail" data-key="${esc(p.key)}"><th><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}</th><td>${p.conv}</td><td>${p.pj}</td><td>${p.tit}</td><td>${p.min || '—'}${p.min ? `<span class="pct">${Math.round(p.min / maxMin * 100)}%</span>` : ''}</td><td>${p.conv ? `${Math.round(p.min / p.conv)}'<span class="pct">${Math.round(p.mconv * 100)}%</span>` : '—'}</td><td>${p.g || ''}</td><td>${p.a || ''}</td><td>${p.mvp || ''}</td><td>${p.ta || ''}</td><td>${p.tr || ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function rivalStats(A) {
   return A.games.map(g => `<div class="card scout"><div class="eyebrow">J${g.n} · ${esc(title(g.rival))}</div>
