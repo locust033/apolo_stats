@@ -349,6 +349,11 @@ nav.bottom button.on .ic { color: var(--accent); }
 .jchip.on span { color: var(--muted); }
 .jchip.on.w { background: var(--win); } .jchip.on.d { background: var(--draw); } .jchip.on.l { background: var(--loss); } .jchip.on.pending { background: var(--card); border-style: solid; }
 
+.lockbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; background: color-mix(in srgb, var(--ink) 6%, var(--card)); border: 1px solid var(--line); }
+.lockbar span { flex: 1; } .lockbar .ic { color: var(--muted); }
+.lockbar.open { background: color-mix(in srgb, var(--warn) 14%, var(--card)); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.cin[readonly] { opacity: .75; }
+
 </style>
 </head>
 <body>
@@ -1151,10 +1156,19 @@ function scoutCard(m) {
     ${s.obs ? `<p class="muted small">${esc(s.obs.slice(0, 220))}${s.obs.length > 220 ? '…' : ''}</p>` : ''}</div>`).join('');
 }
 
+// ---- Protección de partidos terminados ----
+const isFinished = m => !!m && m.clock.phase === 'end';
+const isLocked = m => isFinished(m) && !(UI.unlocked || {})[m.sheetId];
+function lockBar(m) {
+  if (!isFinished(m)) return '';
+  return isLocked(m)
+    ? `<div class="lockbar"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Partido terminado: estadísticas protegidas. Los textos se pueden editar.</span><button class="link" data-act="unlock">Desbloquear</button></div>`
+    : `<div class="lockbar open"><span>Edición desbloqueada: los cambios afectan a las estadísticas.</span><button class="link" data-act="relock">Bloquear</button></div>`;
+}
 function convView(m) {
   const n = Object.keys(m.called).filter(k => m.called[k] && m.roster.some(p => p.id === k)).length;
   const pool = S.extrasPool.filter(x => !m.roster.some(p => up(p.name) === up(x.name)));
-  return `<div class="sumline"><b class="big">${n}</b> convocadas <span class="muted">de ${m.roster.length}</span>
+  return `${lockBar(m)}<div class="sumline"><b class="big">${n}</b> convocadas <span class="muted">de ${m.roster.length}</span>
       <span class="sp"></span><button class="btn ghost sm" data-act="callAll">Todas</button><button class="btn ghost sm" data-act="callNone">Ninguna</button></div>
     <div class="list">${m.roster.map(p => `<button class="prow ${m.called[p.id] ? 'on' : ''}" data-act="toggleCall" data-id="${esc(p.id)}">
         <span class="disc">${esc(p.dorsal)}</span><span class="pn">${esc(title(p.name))}${p.extra ? '<i class="tag">Extra</i>' : ''}</span>
@@ -1200,7 +1214,7 @@ function onceView(m) {
   const calledList = m.roster.filter(p => m.called[p.id]);
   const bench = calledList.filter(p => !placed.has(p.id));
   const nPlaced = Object.values(m.lineup).filter(id => m.called[id]).length;
-  return `${formationChips(m)}
+  return `${lockBar(m)}${formationChips(m)}
     ${field('Sistema tal y como lo apuntas en el Excel', inp('formationText', m.formationText, `placeholder="${esc(m.formation)}"`))}
     <div class="sumline"><b class="big">${nPlaced}</b>/11 titulares <span class="sp"></span><span class="muted small">Capitana: <b>${m.captain && byId[m.captain] ? esc(title(byId[m.captain].name)) : 'sin elegir'}</b></span></div>
     ${pitch(m, 'once')}
@@ -1213,7 +1227,8 @@ function onceView(m) {
 
 function rivalView(m, live = false) {
   const forms = ['1.4.4.2', '1.4.3.3', '1.4.2.3.1', '1.3.5.2', '1.5.3.2', '1.4.1.4.1'];
-  return `<div class="card">${field('Nombre del rival', inp('rival.name', m.rival.name || m.info.rival))}
+  const ro = isLocked(m) ? 'readonly' : '';
+  return `${live ? '' : lockBar(m)}<div class="card">${field('Nombre del rival', inp('rival.name', m.rival.name || m.info.rival))}
     ${field('Sistema del rival', inp('rival.formation', m.rival.formation, 'placeholder="p. ej. 1.4.4.2 - 1.4.2.4."'))}
     <div class="chips">${forms.map(f => `<button class="chip" data-act="rivalForm" data-v="${f}">${f}</button>`).join('')}</div></div>
     ${live ? '' : '<p class="muted small">Si aún no las conoces, déjalo vacío: en el Directo tienes «Apuntar rival» para rellenarlo durante el partido.</p>'}
@@ -1221,7 +1236,7 @@ function rivalView(m, live = false) {
     ${m.rival.players.map((p, i) => `<div class="card rp">
       <div class="row2b">${field('Nombre', inp(`rival.players.${i}.name`, p.name, 'autocapitalize="characters"'))}${field('Dorsal', inp(`rival.players.${i}.dorsal`, p.dorsal, 'inputmode="numeric"'), 'narrow')}</div>
       <div class="chips tight">${RIVAL_POS.map(x => `<button class="chip sm ${p.pos === x ? 'on' : ''}" data-act="rpPos" data-i="${i}" data-v="${x}">${x}</button>`).join('')}</div>
-      <div class="row3">${field('Goles', inp(`rival.players.${i}.goals`, p.goals || '', 'type="number" min="0" inputmode="numeric"'))}${field('Amarillas', inp(`rival.players.${i}.y`, p.y || '', 'type="number" min="0" inputmode="numeric"'))}${field('Rojas', inp(`rival.players.${i}.r`, p.r || '', 'type="number" min="0" inputmode="numeric"'))}</div>
+      <div class="row3">${field('Goles', inp(`rival.players.${i}.goals`, p.goals || '', 'type="number" min="0" inputmode="numeric" ' + ro))}${field('Amarillas', inp(`rival.players.${i}.y`, p.y || '', 'type="number" min="0" inputmode="numeric" ' + ro))}${field('Rojas', inp(`rival.players.${i}.r`, p.r || '', 'type="number" min="0" inputmode="numeric" ' + ro))}</div>
       ${field('A destacar', inp(`rival.players.${i}.note`, p.note, 'placeholder="Goleadora, rápida, juego aéreo…"'))}
       <button class="link danger" data-act="rpDel" data-i="${i}">Quitar</button></div>`).join('')}
     ${m.rival.players.length < 11 ? `<button class="btn wide" data-act="rpAdd">+ Añadir jugadora rival</button>` : ''}
@@ -1248,7 +1263,7 @@ function liveView(m) {
   const gf = comp.gf[0] + comp.gf[1], gc = comp.gc[0] + comp.gc[1];
   const imported = !hasGoalEvents(m) && m.imp && m.imp.score.final;
   const nTit = Object.values(m.lineup).filter(id => m.called[id]).length;
-  return `<div class="board">
+  return `${lockBar(m)}<div class="board">
       <div class="score"><span class="t">${esc(title(m.team).replace(/^C\.d\. /i, ''))}</span><b>${imported ? esc(ourView(m.imp.score.final, awayOf(m.title))).replace(' - ', '<i>–</i>') : `${gf}<i>–</i>${gc}`}</b><span class="t">${esc(title(m.info.rival).replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span></div>
       <div class="clockrow"><span class="phase">${PHASE_LBL[m.clock.phase]}</span><span class="clock" data-clock>${clockText(m)}</span>
         ${m.clock.phase === 'h1' || m.clock.phase === 'h2' ? '<button class="link" data-act="adjust">Ajustar</button>' : ''}</div>
@@ -1298,8 +1313,9 @@ function cierreView(m) {
   const played = m.roster.filter(p => comp.P[p.id] && (comp.P[p.id].tit || comp.P[p.id].min > 0 || (m.ov[p.id] && (m.ov[p.id].pos || m.ov[p.id].min))));
   const rows = m.roster.filter(p => m.called[p.id]);
   const hasOv = Object.keys(m.ov).length > 0;
-  const cell = (p, st, f, w = 'n') => `<td><input class="cin ${f in (m.ov[p.id] || {}) ? 'ovr' : ''} ${w}" data-ov="${esc(p.id)}|${f}" value="${esc(st[f])}" ${f === 'pos' ? '' : 'inputmode="numeric"'} aria-label="${f}"></td>`;
-  return `<div class="card result"><div class="eyebrow">Resultado</div>
+  const lk = isLocked(m);
+  const cell = (p, st, f, w = 'n') => `<td><input class="cin ${f in (m.ov[p.id] || {}) ? 'ovr' : ''} ${w}" data-ov="${esc(p.id)}|${f}" value="${esc(st[f])}" ${f === 'pos' ? '' : 'inputmode="numeric"'} ${lk ? 'readonly data-locked="1"' : ''} aria-label="${f}"></td>`;
+  return `${lockBar(m)}<div class="card result"><div class="eyebrow">Resultado</div>
       <div class="resrow"><div><small>1ª parte</small><b>${esc(ourView(sc.h1, aw) || '—')}</b></div><div><small>2ª parte</small><b>${esc(ourView(sc.h2, aw) || '—')}</b></div><div class="fin"><small>Final</small><b>${esc(ourView(sc.final, aw) || '—')}</b></div></div>
       <p class="muted small">Nosotras – ${esc(title(sheetShort(m.title).name))}.${aw ? ' Jugamos fuera: en el Excel se guarda como local – visitante (' + esc(sc.final || '—') + ').' : ''}</p>
       ${m.clock.phase !== 'end' ? `<button class="btn ghost sm" data-act="markEnd">Dar el partido por terminado</button>` : ''}</div>
@@ -1570,7 +1586,7 @@ const ACT = {
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; persist(); render(); window.scrollTo(0, 0); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
-  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } UI.unlocked = {}; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   railToggle() { S.ui.railOpen = !S.ui.railOpen; persist(); render(); if (S.ui.railOpen) { const c = document.getElementById('j' + S.current); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); } },
   reloadJ() { openMatch(S.current, { reload: true }); },
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
@@ -1579,6 +1595,13 @@ const ACT = {
   doWipe() { const keep = S.settings; S = defaultState(); S.settings = keep; closeSheet(); persist(); render(); if (ready()) openMatch(S.sheets[0].id); },
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
+  unlock() { UI.pendingAct = null; openSheet({ type: 'confirm', title: 'Desbloquear estadísticas', text: 'Este partido ya terminó. Al desbloquear podrás cambiar convocatoria, minutos, goles, tarjetas y MVP; los cambios se escriben en el Excel cuando guardes.', ok: 'Desbloquear', act: 'unlockGo' }); },
+  unlockGo() {
+    const m = cur(); (UI.unlocked = UI.unlocked || {})[m.sheetId] = true;
+    const p = UI.pendingAct; UI.pendingAct = null; closeSheet();
+    if (p && ACT[p.name]) ACT[p.name]({ dataset: p.data, value: '' }, { target: { closest: () => null } }); else render();
+  },
+  relock() { const m = cur(); if (UI.unlocked) delete UI.unlocked[m.sheetId]; render(); },
   askEditSid() { openSheet({ type: 'confirm', title: 'Cambiar el Excel', text: 'Solo hace falta si vas a usar otro Google Sheet. El actual seguirá conectado hasta que pegues uno nuevo que funcione.', ok: 'Cambiar', act: 'doEditSid' }); },
   doEditSid() { closeSheet(); UI.editSid = true; UI.err.sid = null; render(); },
   cancelSid() { UI.editSid = false; UI.err.sid = null; render(); },
@@ -1696,11 +1719,21 @@ const ACT = {
   doClearOv() { const m = cur(); m.ov = {}; m.imp = null; closeSheet(); touch(m); },
 };
 
+// acciones que cambian estadísticas: en un partido terminado piden confirmación
+const GUARDED = new Set(['toggleCall', 'callAll', 'callNone', 'addExtra', 'addPool', 'rmExtra', 'formation', 'formSheet', 'slot', 'rpDel', 'phaseBack', 'adjust',
+  'livePlayer', 'goalStart', 'rgoalStart', 'rcardStart', 'benchIn', 'evEdit', 'mvp', 'clearOv']);
 document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-act]'); if (!el) return;
-  const f = ACT[el.dataset.act]; if (!f) return;
-  ev.preventDefault(); f(el, ev);
+  const name = el.dataset.act; const f = ACT[name]; if (!f) return;
+  ev.preventDefault();
+  if (GUARDED.has(name) && isLocked(cur())) {
+    UI.pendingAct = { name, data: { ...el.dataset } };
+    openSheet({ type: 'confirm', title: 'Partido terminado', text: 'Este partido ya terminó y sus estadísticas están protegidas. Si cambias convocatoria, minutos, goles, tarjetas o MVP, cambiarán al guardar en el Excel. Los textos se pueden editar sin desbloquear.', ok: 'Desbloquear y cambiar', act: 'unlockGo' });
+    return;
+  }
+  f(el, ev);
 });
+document.addEventListener('focusin', ev => { if (ev.target.dataset && ev.target.dataset.locked) { ev.target.blur(); ACT.unlock(); } });
 document.addEventListener('input', ev => {
   const el = ev.target;
   if (el.dataset.bind) {

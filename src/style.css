@@ -328,3 +328,8 @@ nav.bottom button.on .ic { color: var(--accent); }
 .jchip.on, .jchip.on.pending { opacity: 1; color: var(--ink); background-color: inherit; box-shadow: 0 0 0 2.5px var(--ink) inset; }
 .jchip.on span { color: var(--muted); }
 .jchip.on.w { background: var(--win); } .jchip.on.d { background: var(--draw); } .jchip.on.l { background: var(--loss); } .jchip.on.pending { background: var(--card); border-style: solid; }
+
+.lockbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; background: color-mix(in srgb, var(--ink) 6%, var(--card)); border: 1px solid var(--line); }
+.lockbar span { flex: 1; } .lockbar .ic { color: var(--muted); }
+.lockbar.open { background: color-mix(in srgb, var(--warn) 14%, var(--card)); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.cin[readonly] { opacity: .75; }
