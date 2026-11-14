@@ -951,7 +951,6 @@ function summaryView(m) {
   return `<div class="card result fin-${res}">
       <div class="finhead"><span class="finbadge"><svg viewBox="0 0 24 24" class="ic"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Jornada finalizada</span><span class="muted small">${esc(fmtFecha(m.info.fecha) || '')}${m.info.lugar ? ' · ' + esc(title(m.info.lugar)) : ''}</span></div>
       <div class="resrow"><div><small>1ª parte</small><b>${esc(ourView(sc.h1, aw) || '—')}</b></div><div><small>2ª parte</small><b>${esc(ourView(sc.h2, aw) || '—')}</b></div><div class="fin"><small>Final</small><b>${esc(ourView(sc.final, aw) || '—')}</b></div></div>
-      <p class="muted small">Nosotras – ${esc(title(sheetShort(m.title).name))}${m.formationText || m.formation ? ' · sistema ' + esc(m.formationText || m.formation) : ''}${m.rival.formation ? ' · rival ' + esc(m.rival.formation) : ''}</p>
     </div>
     ${edit ? `<div class="lockbar open"><span>Editando estadísticas: los cambios se escriben en el Excel al guardar.</span><button class="link" data-act="editStatsOff">Hecho</button></div>`
            : `<div class="acts"><button class="btn" data-act="askEditStats">Cambiar estadísticas</button><button class="btn danger" data-act="askWipeJ">Borrar datos de la jornada</button></div>`}
