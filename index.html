@@ -857,7 +857,7 @@ const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 // El lugar se rellena siempre que esté vacío. Fecha y hora solo el mismo día del partido (o al pulsar el botón),
 // porque los horarios suelen cambiar durante la semana.
 function applyFfcv(m, force = false) {
-  const f = ffcvFor(m); if (!f) return false;
+  const f = ffcvFor(m); if (!f || (m.finalized && !force)) return false;
   const fecha = parseFecha(f.fecha);
   const sameDay = fecha === todayISO();
   const vals = { lugar: lugarFmt(f.campo) };
@@ -867,6 +867,10 @@ function applyFfcv(m, force = false) {
   if (ch) m.dirty = true;
   return ch;
 }
+// Copias guardadas en el móvil por versiones anteriores de la app
+function migrateMatch(m) {
+  if (m.finalized === undefined && m.imp && m.imp.score && m.imp.score.final && !m.events.length) m.finalized = true;
+}
 function seedMatch(sheet) {
   const L = { players: [], rivalPlayers: [], goals: { ours: [], theirs: [] }, rival: sheetShort(sheet.title).name, team: 'C.D. APOLO' };
   const m = matchFromLayout(sheet, L); m.seed = true; applyFfcv(m); m.dirty = false; return m;
@@ -874,6 +878,10 @@ function seedMatch(sheet) {
 async function openMatch(id, { reload = false } = {}) {
   S.current = id; persist();
   const sh = sheetById(id); if (!sh) return render();
+  const ex = S.matches[id];
+  if (ex) migrateMatch(ex);
+  // Sin cambios pendientes en el móvil, se lee siempre del Excel: así una jornada ya jugada aparece como finalizada
+  if (ex && !reload && ready() && !(ex.dirty || ['h1', 'ht', 'h2'].includes(ex.clock.phase))) reload = true;
   if (S.matches[id] && !reload) applyFfcv(S.matches[id]);
   if (!S.matches[id] || reload) {
     if (!S.matches[id]) S.matches[id] = seedMatch(sh);
@@ -1899,6 +1907,7 @@ setInterval(() => {
 function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}
   if (S.stats.v !== 2) S.stats = { v: 2, at: 0, sums: {} };
+  Object.values(S.matches).forEach(migrateMatch);
   if (S.current == null) S.current = S.sheets[0].id;
   pickStartJornada(); S.ui.railOpen = false;
   if (!S.matches[S.current]) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
