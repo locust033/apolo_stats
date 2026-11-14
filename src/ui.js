@@ -31,34 +31,52 @@ const title = s => { const t = String(s).toLowerCase(); return t.replace(/(^|[\s
 
 // ===== GOOGLE: inicio de sesión en el navegador + API de Google Sheets =====
 const CLIENT_ID_DEFAULT = '634935377819-d73m1hp8oqbo1c6mc2mhr7qr17b7aptl.apps.googleusercontent.com';
-const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
 const AUTH_KEY = 'apolo-auth', FFCV_KEY = 'apolo-ffcv', FFCV_IMPORT_KEY = 'apolo-ffcv-import';
-const AUTH = { token: null, exp: 0 };
+const AUTH = { token: null, exp: 0, hint: '', everIn: false };
+const SILENT_KEY = 'apolo-silent', SILENT_FAIL_KEY = 'apolo-silent-fail';
 let FFCV_SNAP = null;
 let mcpState = 'waiting';
-let resumeAfterLogin = '';
+let resumeAfterLogin = '', pendingInteractive = null;
 const ready = () => !!AUTH.token && AUTH.exp > Date.now() + 20000;
 const clientId = () => str(S.settings.clientId) || CLIENT_ID_DEFAULT;
 const redirectUri = () => location.origin + location.pathname;
-function loadAuth() { try { const a = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); if (a && a.exp > Date.now()) { AUTH.token = a.token; AUTH.exp = a.exp; } } catch (e) {} }
+function loadAuth() { try { const a = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); if (a) { AUTH.hint = a.hint || ''; AUTH.everIn = !!(a.everIn || a.token); if (a.exp > Date.now()) { AUTH.token = a.token; AUTH.exp = a.exp; } } } catch (e) {} }
+// Renovar sin pedir nada: Google devuelve un token nuevo al momento si sigues con la sesión abierta en este móvil
+const silentFailedRecently = () => { try { return Date.now() - (+localStorage.getItem(SILENT_FAIL_KEY) || 0) < 10 * 60000; } catch (e) { return false; } };
+const canSilent = () => AUTH.everIn && !silentFailedRecently() && navigator.onLine !== false;
+async function fetchHint() {
+  if (AUTH.hint || !AUTH.token) return;
+  try { const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + AUTH.token } }); if (r.ok) { const j = await r.json(); if (j.email) { AUTH.hint = j.email; saveAuth(); } } } catch (e) {}
+}
 function saveAuth() { try { localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH)); } catch (e) {} }
 function captureRedirect() {
   const h = location.hash.slice(1); if (!h) return;
   if (h.startsWith('ffcv=')) { try { localStorage.setItem(FFCV_IMPORT_KEY, decodeURIComponent(h.slice(5))); } catch (e) {} }
   else {
     const p = new URLSearchParams(h);
-    if (p.get('access_token')) { AUTH.token = p.get('access_token'); AUTH.exp = Date.now() + (+p.get('expires_in') || 3600) * 1000; saveAuth(); resumeAfterLogin = p.get('state') || ''; }
-    else if (p.get('error')) UI.err.auth = 'Google no ha dado acceso (' + p.get('error') + ').';
+    let silent = false; try { silent = !!sessionStorage.getItem(SILENT_KEY); sessionStorage.removeItem(SILENT_KEY); } catch (e) {}
+    if (p.get('access_token')) { AUTH.token = p.get('access_token'); AUTH.exp = Date.now() + (+p.get('expires_in') || 3600) * 1000; AUTH.everIn = true; saveAuth(); resumeAfterLogin = p.get('state') || ''; try { localStorage.removeItem(SILENT_FAIL_KEY); } catch (e) {} }
+    else if (p.get('error')) {
+      if (silent) { // no se pudo renovar sola: se pide entrar (y si ibas a guardar, se abre ya la pantalla de Google)
+        try { localStorage.setItem(SILENT_FAIL_KEY, String(Date.now())); } catch (e) {}
+        if (p.get('state') === 'save') pendingInteractive = 'save';
+      } else UI.err.auth = 'Google no ha dado acceso (' + p.get('error') + ').';
+    }
   }
   history.replaceState(null, '', location.pathname + location.search);
 }
-function signIn(state = '') {
+function signIn(state = '', { silent = canSilent() } = {}) {
   if (!clientId()) { S.ui.tab = 'settings'; UI.err.auth = 'Falta el ID de cliente de Google: pégalo en Ajustes.'; render(); return; }
   try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {}
-  const q = new URLSearchParams({ client_id: clientId(), redirect_uri: redirectUri(), response_type: 'token', scope: SCOPE, include_granted_scopes: 'true', state, prompt: 'select_account' });
+  const o = { client_id: clientId(), redirect_uri: redirectUri(), response_type: 'token', scope: SCOPE, include_granted_scopes: 'true', state };
+  if (silent) o.prompt = 'none'; else if (!AUTH.hint) o.prompt = 'select_account';
+  if (AUTH.hint) o.login_hint = AUTH.hint;
+  try { if (silent) sessionStorage.setItem(SILENT_KEY, '1'); else sessionStorage.removeItem(SILENT_KEY); } catch (e) {}
+  const q = new URLSearchParams(o);
   location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + q.toString();
 }
-function signOut() { AUTH.token = null; AUTH.exp = 0; saveAuth(); mcpState = 'none'; render(); }
+function signOut() { AUTH.token = null; AUTH.exp = 0; AUTH.everIn = false; saveAuth(); mcpState = 'none'; render(); }
 function errText(e) {
   const c = e && e.code;
   if (c === 'needs_reauth') return 'Tu sesión de Google ha caducado. Vuelve a entrar con Google para guardar.';
@@ -100,6 +118,15 @@ async function call(tool, input = {}, { read = false } = {}) {
 }
 const sid = () => { const v = str(S.settings.sid); const m = v.match(/\/d\/([a-zA-Z0-9_-]+)/); return m ? m[1] : v; };
 async function readRows(t) { const p = await call('get_values', { range: `${qs(t)}!A1:M140` }, { read: true }); return (p && p.values) || []; }
+const CIT_FORMULA = '=IF(D10="";"";D10-TIME(1;15;0))';
+// Rellena lugar, fecha y hora vacíos con lo que haya en el Excel
+function infoFromLayout(m, L) {
+  let ch = false;
+  const set = (k, v) => { if (v && !str(m.info[k])) { m.info[k] = v; ch = true; } };
+  set('lugar', str(L.lugar)); set('fecha', parseFecha(L.fecha)); set('hora', stripH(L.hora));
+  if (ch) m.info.cit = citOf(m.info.hora);
+  return ch;
+}
 // Celdas «POSITIVO: …» y «A MEJORAR: …» con la etiqueta en negrita
 function labelCells(shId, L, texts) {
   const out = [];
@@ -160,10 +187,14 @@ async function importFfcvIfPending() {
 }
 
 async function initAuth() {
-  captureRedirect(); loadAuth(); loadFfcvCache();
+  loadAuth(); captureRedirect(); loadFfcvCache();
+  if (pendingInteractive) { const st = pendingInteractive; pendingInteractive = null; return signIn(st, { silent: false }); }
+  // token caducado (dura 1 h): se renueva solo, sin pantalla de Google
+  if (!ready() && canSilent() && clientId()) return signIn('', { silent: true });
   mcpState = ready() ? 'ready' : 'none';
   render();
   if (!ready()) return;
+  fetchHint();
   UI.hold = true; // una sola pintada al terminar de cargar, para que no parpadee
   try {
   if (!sid()) { S.ui.tab = 'settings'; UI.err.auth = 'Pega el enlace de tu Google Sheet en Ajustes.'; render(); return; }
@@ -209,6 +240,7 @@ function applyFfcv(m, force = false) {
 // Copias guardadas en el móvil por versiones anteriores de la app
 function migrateMatch(m) {
   if (!m.vals) m.vals = {};
+  if (!citOf(m.info.hora)) m.info.cit = '';
   if (m.texts.pos == null) m.texts.pos = ''; if (m.texts.mej == null) m.texts.mej = '';
   markFed(m);
   if (m.finalized === undefined && m.imp && m.imp.score && m.imp.score.final && !m.events.length) m.finalized = true;
@@ -245,6 +277,8 @@ async function openMatch(id, { reload = false } = {}) {
       UI.loading[id] = false; persist();
     }
   }
+  const mm0 = S.matches[id];
+  if (mm0 && !reload && ready() && !mm0.finalized) readRows(sh.title).then(rows => { if (infoFromLayout(mm0, parseLayout(rows))) { persist(); render(); } }).catch(() => {});
   const mm = S.matches[id];
   if (mm) { prefillRival(mm); if (!mm.finalized) S.ui.step = autoStep(mm); }
   render();
@@ -321,6 +355,7 @@ async function saveToSheet(m) {
   try {
     const t = m.title, shId = m.sheetId, Hh = H();
     let rows = await readRows(t); let L = parseLayout(rows);
+    infoFromLayout(m, L); // lo que ya esté en el Excel (p. ej. la revisión del martes) no se pisa con vacíos
     const rowKey = p => pkey(p.name, p.dorsal);
     const findRow = (L, p) => L.players.find(r => !r.blank && rowKey(r) === p.id) || L.players.find(r => !r.blank && up(r.name) === up(p.name));
     const extrasNeeded = m.roster.filter(p => m.called[p.id] && !findRow(L, p));
@@ -354,7 +389,10 @@ async function saveToSheet(m) {
     fmtReq.push({ setDataValidation: { range: { sheetId: shId, startRowIndex: L.hdr + 1, endRowIndex: L.total, startColumnIndex: 12, endColumnIndex: 13 }, rule: { condition: { type: 'BOOLEAN' }, showCustomUi: true } } });
     // POSITIVO / A MEJORAR: etiqueta en negrita + texto
     fmtReq.push(...labelCells(shId, L, m.texts));
+    if (citOf(m.info.hora)) fmtReq.push({ repeatCell: { range: { sheetId: shId, startRowIndex: 9, endRowIndex: 11, startColumnIndex: 3, endColumnIndex: 4 }, cell: { userEnteredFormat: { numberFormat: { type: 'TIME', pattern: 'hh:mm' } } }, fields: 'userEnteredFormat.numberFormat' } });
     if (fmtReq.length) await call('update_spreadsheet', { spreadsheetId: sid(), requests: fmtReq });
+    // hora como hora de verdad (como en tu Excel) y la citación con la fórmula: 1 h 15 antes, vacía si no hay hora
+    if (citOf(m.info.hora)) await call('update_formulas', { spreadsheetId: sid(), range: `${qs(t)}!D10:D11`, formulas: [[m.info.hora], [CIT_FORMULA]] });
     await call('update_formulas', { spreadsheetId: sid(), range: `${qs(t)}!E${L.total + 1}`, formulas: [[`=SUM(E${L.hdr + 2}:E${L.total})`]] });
 
     step('Escribiendo jugadoras…');
@@ -373,7 +411,7 @@ async function saveToSheet(m) {
     const pad = (arr, n, w) => { const o = arr.slice(0, n).map(r => r.slice()); while (o.length < n) o.push(Array(w).fill('')); return o; };
     const writes = [
       [`${qs(t)}!A${L.hdr + 1}:M${L.total}`, block],
-      [`${qs(t)}!D8:D11`, [[m.info.lugar || ''], [fmtFecha(m.info.fecha)], [addH(m.info.hora)], [addH(citOf(m.info.hora) || m.info.cit)]]],
+      [`${qs(t)}!D8:D9`, [[m.info.lugar || null], [fmtFecha(m.info.fecha) || null]]],
       [`${qs(t)}!K8:K11`, [[sc.h1], [sc.h2], [null], [sc.final]]],
     ];
     if (L.rh >= 0) {
@@ -441,7 +479,7 @@ async function wipeJornada(m) {
     const t = m.title; const L = parseLayout(await readRows(t));
     const blank = (n, w) => Array.from({ length: n }, () => Array(w).fill(''));
     const writes = [
-      [`${qs(t)}!D8:D11`, blank(4, 1)],
+      [`${qs(t)}!D8:D10`, blank(3, 1)],
       [`${qs(t)}!K8:K11`, [[''], [''], [null], ['']]],
       [`${qs(t)}!A${L.hdr + 2}:M${L.total}`, L.players.map(r => r.blank ? Array(13).fill(null) : [null, null, false, false, '', '', '', '', false, '', '', '', L.hasCap ? false : null])],
     ];
@@ -453,6 +491,7 @@ async function wipeJornada(m) {
     const vr = valRow(L, () => ''); if (vr) writes.push([`${qs(t)}!${vr[0]}`, vr[1]]);
     if (L.gh >= 0) { writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, blank(11, 3)]); writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, blank(11, 4).map(r => [r[0], null, r[2], r[3]])]); }
     await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
+    await call('update_formulas', { spreadsheetId: sid(), range: `${qs(t)}!D11`, formulas: [[CIT_FORMULA]] });
     try { await call('update_spreadsheet', { requests: [...labelCells(m.sheetId, L, {}), ...resultColorReqs(m.sheetId, null)] }); } catch (e) {}
     delete S.stats.sums[m.sheetId]; delete S.matches[m.sheetId];
     if (UI.editStats) delete UI.editStats[m.sheetId];
@@ -640,7 +679,7 @@ function previaView(m) {
     ${field('Fecha', inp('info.fecha', m.info.fecha, 'type="date"'))}
     <div class="row2">
       ${field('Hora partido', inp('info.hora', m.info.hora, 'type="time"'))}
-      ${field('Citación (1 h 15 antes)', `<output id="citOut" class="ro">${esc(citOf(m.info.hora) || m.info.cit || '—')}</output>`)}
+      ${field('Citación (1 h 15 antes)', `<output id="citOut" class="ro">${esc(citOf(m.info.hora) || '—')}</output>`)}
     </div>
     ${ffcvBlock(m)}
   </div>
@@ -1398,7 +1437,7 @@ document.addEventListener('input', ev => {
     if (path === 'rival.name') m.info.rival = m.info.rival || v;
     setPath(m, path, v);
     { const mm = path.match(/^rival\.players\.(\d+)\./); if (mm && m.rival.players[+mm[1]]) m.rival.players[+mm[1]].fed = false; }
-    if (path === 'info.hora') { m.info.cit = citOf(v) || m.info.cit; const o = document.getElementById('citOut'); if (o) o.textContent = m.info.cit || '—'; }
+    if (path === 'info.hora') { m.info.cit = citOf(v); const o = document.getElementById('citOut'); if (o) o.textContent = m.info.cit || '—'; }
     m.dirty = true; persist();
     const chip = document.querySelector('.top .sync'); if (chip && mcpState !== 'none' && !chip.classList.contains('dirty') && UI.sync !== 'saving') chip.outerHTML = '<button class="sync dirty" data-act="save">Guardar en Excel</button>';
   } else if (el.dataset.sbind && UI.sheet) {

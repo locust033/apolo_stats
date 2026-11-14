@@ -143,7 +143,7 @@ const fmtCards = (y, r) => [y ? y + 'A' : '', r ? r + 'R' : ''].filter(Boolean).
 function matchFromLayout(sheet, L) {
   const m = {
     v: 1, sheetId: sheet.id, title: sheet.title, team: L.team || 'C.D. APOLO',
-    info: { rival: L.rival || sheetShort(sheet.title).name, lugar: L.lugar, fecha: parseFecha(L.fecha), hora: stripH(L.hora), cit: stripH(L.cit) },
+    info: { rival: L.rival || sheetShort(sheet.title).name, lugar: L.lugar, fecha: parseFecha(L.fecha), hora: stripH(L.hora), cit: stripH(L.hora) ? stripH(L.cit) : '' },
     roster: [], called: {}, formation: guessFormation(L.ourForm) || DEFAULT_FORMATION, formationText: L.ourForm || '',
     lineup: {}, captain: null,
     rival: { name: L.rivalName || L.rival || '', formation: L.rivalForm || '',
