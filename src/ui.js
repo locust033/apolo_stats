@@ -461,8 +461,9 @@ function ffcvBlock(m) {
   return `<div class="ffcv"><div class="ffcvinfo"><span class="eyebrow">Federación · jornada ${f.j}</span>
       <span>${home ? 'En casa' : 'Fuera'} · ${esc(title(home ? f.visit : f.local))} · ${esc(f.fecha)} ${esc(f.hora)}</span>
       <small class="muted">Horario según la federación (${esc(snapAt)}): puede haber cambiado. La fecha y la hora se rellenan solas el día del partido.</small></div>
-    <div class="acts"><a class="btn" href="${ffcvAppUrl(f)}" target="_blank" rel="noopener">Abrir en la app FFCV</a><button class="btn ghost" data-act="ffcvFill">Poner fecha, hora y campo de la federación</button></div>
-    <a class="link small" href="${ffcvWebUrl(f)}" target="_blank" rel="noopener">Ver la jornada en ffcv.es</a></div>`;
+    <div class="acts"><a class="btn" href="${ffcvWebUrl(f)}" target="_blank" rel="noopener">Ver el partido en la FFCV</a><a class="btn ghost" href="https://maps.apple.com/?q=${enc(f.campo.trim())}" target="_blank" rel="noopener">Cómo llegar</a></div>
+    <small class="muted">Se abre la jornada ${f.j} en ffcv.es: toca «Ver detalles» en vuestro partido. La federación no permite enlazar directamente a la ficha del partido ni a su app.</small>
+    <button class="link small" data-act="ffcvFill">Poner fecha, hora y campo de la federación</button></div>`;
 }
 function previaView(m) {
   const scout = scoutCard(m);
