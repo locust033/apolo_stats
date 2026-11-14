@@ -193,7 +193,7 @@ function migrateMatch(m) {
   if (m.finalized === undefined && m.imp && m.imp.score && m.imp.score.final && !m.events.length) m.finalized = true;
   // jornadas guardadas solo con convocatoria/once que una versión anterior tomó por jugadas
   if (!m.finalized && m.clock.phase === 'end' && !m.events.length && m.imp && !(m.imp.score && m.imp.score.final)
-      && Object.values(m.ov).every(o => Object.values(o).every(v => !str(v)))) { m.clock = { phase: 'pre' }; m.imp = null; m.ov = {}; }
+      && Object.values(m.ov).every(o => ['min', 'g', 'a', 'gp', 'ta', 'tr'].every(k => !str(o[k])))) { m.clock = { phase: 'pre' }; m.imp = null; m.ov = {}; }
 }
 function seedMatch(sheet) {
   const L = { players: [], rivalPlayers: [], goals: { ours: [], theirs: [] }, rival: sheetShort(sheet.title).name, team: 'C.D. APOLO' };
@@ -526,7 +526,10 @@ function matchView(m) {
     return jornadaRail() + loading0 + `<section class="pad">${summaryView(m)}</section>`;
   }
   const step = S.ui.step;
-  const tabs = `<div class="steps">${STEPS.map(([k, l], i) => `<button class="${step === k ? 'on' : ''}" data-act="step" data-v="${k}"><i>${i + 1}</i>${l}</button>`).join('')}</div>`;
+  const si = STEPS.findIndex(([k]) => k === step);
+  const chevS = `<svg viewBox="0 0 24 24" class="ic chev ${S.ui.stepsOpen ? 'up' : ''}"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const tabs = `<div class="stepwrap"><button class="stephead" data-act="stepsToggle" aria-expanded="${!!S.ui.stepsOpen}"><i>${si + 1}</i><b>${STEPS[si][1]}</b><span class="sp"></span><span class="rl">${S.ui.stepsOpen ? 'Ocultar' : 'Pasos'}</span>${chevS}</button>
+    ${S.ui.stepsOpen ? `<div class="steps">${STEPS.map(([k, l], i) => `<button class="${step === k ? 'on' : ''}" data-act="step" data-v="${k}"><i>${i + 1}</i>${l}</button>`).join('')}</div>` : ''}</div>`;
   const loading = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
   const err = UI.err.match ? `<div class="banner err">${esc(UI.err.match)} <button class="link" data-act="reloadJ">Reintentar</button></div>` : '';
   const views = { previa: previaView, convocatoria: convView, once: onceView, rival: rivalView, directo: liveView, cierre: cierreView };
@@ -698,6 +701,7 @@ function liveView(m) {
         ${m.clock.phase === 'h1' || m.clock.phase === 'h2' ? '<button class="link" data-act="adjust">Ajustar</button>' : ''}</div>
       <div class="phasebtns">${PHASE_BTN[m.clock.phase] ? `<button class="btn primary" data-act="phase">${PHASE_BTN[m.clock.phase]}</button>` : ''}
         ${m.clock.phase !== 'pre' ? '<button class="btn ghost sm" data-act="phaseBack">Deshacer</button>' : ''}</div>
+      ${m.clock.phase !== 'pre' ? '<button class="link resetlink" data-act="askResetLive">Reiniciar el directo desde cero</button>' : ''}
     </div>
     <div class="seg">${[['us', 'Nuestro equipo'], ['rival', 'Apuntar rival']].map(([k, l]) => `<button class="${(S.ui.liveSide || 'us') === k ? 'on' : ''}" data-act="liveSide" data-v="${k}">${l}</button>`).join('')}</div>
     ${S.ui.liveSide === 'rival' ? rivalLive(m) : `
@@ -1061,7 +1065,8 @@ function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for 
 const ACT = {
   noop() {},
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
-  step(el) { S.ui.step = el.dataset.v; persist(); render(); window.scrollTo(0, 0); },
+  step(el) { S.ui.step = el.dataset.v; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
+  stepsToggle() { S.ui.stepsOpen = !S.ui.stepsOpen; persist(); render(); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
   openJ(el) { if (el.dataset.go) { S.ui.tab = 'match'; } UI.unlocked = {}; UI.editStats = {}; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   railToggle() { S.ui.railOpen = !S.ui.railOpen; persist(); render(); if (S.ui.railOpen) { const c = document.getElementById('j' + S.current); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); } },
@@ -1072,6 +1077,8 @@ const ACT = {
   doWipe() { const keep = S.settings; S = defaultState(); S.settings = keep; closeSheet(); persist(); render(); if (ready()) openMatch(S.sheets[0].id); },
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
+  askResetLive() { openSheet({ type: 'confirm', title: 'Reiniciar el directo', text: 'El reloj vuelve a 00:00 y se borran los goles, tarjetas y cambios apuntados en este directo. La convocatoria y el once se mantienen.', ok: 'Reiniciar', act: 'doResetLive' }); },
+  doResetLive() { const m = cur(); m.clock = { phase: 'pre' }; m.events = []; m.ov = {}; m.imp = null; m.finalized = false; closeSheet(); touch(m); },
   finalize() { const m = cur(); m.finalized = true; if (UI.editStats) delete UI.editStats[m.sheetId]; touch(m); window.scrollTo(0, 0); saveToSheet(m); },
   askWipeJ() {
     const m = cur();

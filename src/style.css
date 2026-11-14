@@ -353,3 +353,11 @@ nav.bottom button.on .ic { color: var(--accent); }
 .fedinfo[open] > summary::after { content: '▴'; }
 .fedinfo[open] { gap: 12px; }
 .fedinfo > .card, .fedinfo > .chips { margin-top: 12px; }
+
+.stepwrap { padding: 8px 16px 0; display: grid; gap: 6px; }
+.stepwrap .steps { padding: 0; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+.stephead { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 4px 12px; border-radius: 12px; background: transparent; border: 1.5px solid var(--line); width: 100%; text-align: left; }
+.stephead i { font-style: normal; font-family: var(--display); font-weight: 800; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: var(--accent); color: var(--accent-ink); }
+.stephead b { font-weight: 700; }
+.stephead .sp { flex: 1; } .stephead .rl { font-size: 13px; font-weight: 600; color: var(--muted); }
+.board .resetlink { color: var(--paper); opacity: .6; font-size: 13px; justify-self: center; }
