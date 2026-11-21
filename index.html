@@ -607,6 +607,13 @@ nav.bottom button.on .ic { color: var(--accent); }
 .top .homebtn ~ .sync { max-width: 34vw; }
 .settabs { margin-bottom: 14px; }
 
+.tlist { margin: 14px 0 4px; border-top: 1px solid var(--line); padding-top: 10px; }
+.tlist .eyebrow { margin-bottom: 4px; }
+.trow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 14.5px; }
+.trow:last-child { border-bottom: 0; }
+.trow em { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); padding: 2px 7px; border-radius: 999px; margin-left: 4px; }
+.link.small { font-size: 13.5px; }
+
 </style>
 </head>
 <body>
@@ -2765,7 +2772,8 @@ function teamsBlock() {
   return `<div class="fld"><span>Equipo (Google Sheet)</span>
     ${l.length > 1 ? `<select class="teamsel">${l.map(t => `<option value="${esc(t.id)}" ${t.active ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</select>`
       : `<div class="locked">${lock}<b>${esc(S.settings.sheetTitle || 'Excel conectado')}</b></div>`}</div>
-    <div class="acts"><button class="btn" data-act="addTeam">+ Añadir otro equipo</button>${l.length > 1 ? '<button class="btn ghost" data-act="askRemoveTeam">Quitar este equipo</button>' : ''}</div>`;
+    <div class="tlist"><div class="eyebrow">Equipos en la app</div>${l.map(t => `<div class="trow"><span>${esc(t.title)}${t.active ? ' <em>en uso</em>' : ''}</span><button class="link danger small" data-act="askRemoveTeam" data-id="${esc(t.id)}">Quitar</button></div>`).join('')}</div>
+    <div class="acts"><button class="btn" data-act="addTeam">+ Añadir otro equipo</button></div>`;
 }
 
 // ===== CAPITANAS POR TURNO Y ONCE SUGERIDO =====
@@ -3101,8 +3109,39 @@ const ACT = {
   addTeamUnpick() { UI.addT.sel = null; render(); },
   addTeamGo() { addTeamGo(); },
   buildCheck() { buildTeamExcel(true); },
-  askRemoveTeam() { openSheet({ type: 'confirm', title: 'Quitar este equipo de la app', text: `Se quita «${esc(S.settings.sheetTitle || 'este Excel')}» de la app y lo que tengas apuntado sin guardar en el móvil. El Google Sheet no se toca: puedes volver a añadirlo cuando quieras.`, ok: 'Quitar', act: 'doRemoveTeam' }); },
-  doRemoveTeam() { closeSheet(); const other = Object.keys(S.profiles || {})[0]; if (!other) return; const gone = sid(); activateProfile(other, null, true); delete S.profiles[gone]; persist(); render(); },
+  askRemoveTeam(el) {
+    const id = el.dataset.id || sid(); const active = id === sid();
+    const p = active ? { settings: S.settings, matches: S.matches } : (S.profiles || {})[id]; if (!p) return;
+    const name = (p.settings && p.settings.sheetTitle) || 'este Excel';
+    const dirty = Object.values(p.matches || {}).filter(m => m.dirty).length;
+    const last = teamsList().length === 1;
+    UI.removeId = id;
+    openSheet({ type: 'confirm', title: 'Quitar equipo de la app', ok: 'Quitar', act: 'doRemoveTeam',
+      text: `Se quita «${esc(name)}» de la app en este móvil.${dirty ? ` <b>Tiene ${dirty} jornada${dirty > 1 ? 's' : ''} con cambios sin guardar en el Excel, que se perderán.</b>` : ''} El Google Sheet no se borra: puedes volver a añadirlo cuando quieras.${last ? ' Como es el único equipo, la app se quedará vacía hasta que conectes otro.' : ''}` });
+  },
+  async doRemoveTeam() {
+    const id = UI.removeId; UI.removeId = null; closeSheet(); if (!id) return;
+    const active = id === sid();
+    const p = active ? { settings: S.settings } : (S.profiles || {})[id];
+    const cfg = p && p.settings && p.settings.ffcv; const wasMain = p && p.settings && p.settings.hasAvisos;
+    // que la federación deje de preparar sus datos (fila «equipo» del Excel principal)
+    const main = mainSid();
+    if (cfg && cfg.team && !wasMain && main && main !== id && ready()) {
+      try {
+        const rows = (await call('get_values', { range: `'AVISOS'!A1:B600`, sid: main }, { read: true })).values || [];
+        const i = rows.findIndex(r => r[0] === 'equipo' && (() => { try { return JSON.parse(r[1]).team === cfg.team; } catch (e) { return false; } })());
+        if (i >= 0) await call('update_values', { range: `'AVISOS'!A${i + 1}:B${i + 1}`, values: [['', '']], sid: main });
+      } catch (e) {}
+    }
+    try { localStorage.removeItem(FFCV_KEY + ':' + id); } catch (e) {}
+    if (!active) { delete S.profiles[id]; persist(); render(); showToast('Equipo quitado de la app.'); return; }
+    const other = teamsList().find(t => !t.active);
+    if (other) { activateProfile(other.id, null, true); delete S.profiles[id]; persist(); showToast('Equipo quitado de la app.'); return; }
+    // era el único: la app se queda vacía (se mantienen los ajustes de la app)
+    const keep = { startView: S.settings.startView, clientId: S.settings.clientId };
+    S = defaultState(); Object.assign(S.settings, keep); S.settings.sid = ''; S.ui.tab = 'settings'; S.ui.setTab = 'team';
+    FFCV_SNAP = null; UI.editSid = false; UI.err = {}; persist(); render(); showToast('Equipo quitado. Conecta otro Excel cuando quieras.');
+  },
   async unsavedSave() {
     const fn = UI.pendingSwitch; const ctx = UI.sheet && UI.sheet.ctx; closeSheet();
     for (const m of Object.values(S.matches).filter(x => x.dirty)) { await saveToSheet(m); if (m.dirty) { showToast('No se pudo guardar ' + m.title + '. ' + (ctx === 'home' ? 'Sigues en la jornada.' : 'No he cambiado de equipo.')); return; } }
