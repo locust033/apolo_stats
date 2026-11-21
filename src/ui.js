@@ -300,6 +300,7 @@ function applyFfcv(m, force = false) {
 }
 // Copias guardadas en el móvil por versiones anteriores de la app
 function migrateMatch(m) {
+  if (!FORMATIONS[m.formation] && !ensureFormation(m.formation)) m.formation = DEFAULT_FORMATION;
   if (!m.vals) m.vals = {};
   if (!citOf(m.info.hora)) m.info.cit = '';
   if (m.texts.pos == null) m.texts.pos = ''; if (m.texts.mej == null) m.texts.mej = '';
@@ -674,6 +675,45 @@ document.addEventListener('pointerup', ev => endDrag(ev, false));
 document.addEventListener('pointercancel', ev => endDrag(ev, true));
 document.addEventListener('touchmove', ev => { if (drag && drag.armed) ev.preventDefault(); }, { passive: false });
 document.addEventListener('contextmenu', ev => { if (ev.target.closest('.livepitch .tok')) ev.preventDefault(); });
+// Sistema escrito a mano: si es uno de la lista se elige; si no, se coloca solo a partir de los números
+function applyFormationText(m) {
+  const t = str(m.formationText); if (!t || !/\d/.test(t)) return;
+  const key = guessFormation(t);
+  if (!key) { showToast('No sé colocar ese sistema en el campo: tienen que sumar entre 7 y 11 jugadoras con la portera (p. ej. 1-3-5-2).'); return; }
+  if (key === m.formation) return;
+  m.formation = key; for (const sl of Object.keys(m.lineup)) if (!FORMATIONS[key][sl]) delete m.lineup[sl];
+  touch(m);
+  if (DYN.has(key)) showToast(`Sistema ${key} colocado en el campo a partir de los números.`);
+}
+// Arrastrar en el once: mantén pulsado un hueco y muévelo por el campo (solo el dibujo)
+let odrag = null;
+document.addEventListener('pointerdown', ev => {
+  const el = ev.target.closest('.oncepitch .tok'); if (!el) return;
+  const start = { x: ev.clientX, y: ev.clientY };
+  odrag = { el, start, armed: false, timer: setTimeout(() => {
+    if (!odrag || odrag.el !== el) return;
+    odrag.armed = true; lpAt = Date.now(); if (navigator.vibrate) navigator.vibrate(15);
+    el.classList.add('moving'); el.closest('.pitch').classList.add('dragging');
+  }, 280) };
+});
+const odragPos = ev => { const r = odrag.el.closest('.pitch').getBoundingClientRect();
+  const x = Math.max(5, Math.min(95, (ev.clientX - r.left) / r.width * 100)), top = Math.max(5, Math.min(95, (ev.clientY - r.top) / r.height * 100));
+  return { x: Math.round(x), y: Math.round(100 - top), top }; };
+document.addEventListener('pointermove', ev => {
+  if (!odrag) return;
+  if (!odrag.armed) { if (Math.hypot(ev.clientX - odrag.start.x, ev.clientY - odrag.start.y) > 10) { clearTimeout(odrag.timer); odrag = null; } return; }
+  const p = odragPos(ev); odrag.el.style.left = p.x + '%'; odrag.el.style.top = p.top + '%'; odrag.last = p;
+});
+function endODrag(cancel) {
+  if (!odrag) return; const d = odrag; odrag = null; clearTimeout(d.timer);
+  if (!d.armed) return; lpAt = Date.now();
+  const m = cur(); if (!cancel && d.last && m) { S.look = S.look || {}; const k = lookKey(m); (S.look[k] = S.look[k] || {})[d.el.dataset.slot] = [d.last.x, d.last.y]; persist(); }
+  render();
+}
+document.addEventListener('pointerup', () => endODrag(false));
+document.addEventListener('pointercancel', () => endODrag(true));
+document.addEventListener('touchmove', ev => { if (odrag && odrag.armed) ev.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', ev => { if (ev.target.closest('.oncepitch .tok')) ev.preventDefault(); });
 const nowMinute = m => { const half = clockHalf(m.clock); return { min: Math.max(half === 2 && m.clock.phase === 'h2' ? H() + 1 : 1, clockMinute(m.clock, H())), half }; };
 
 // ===== AVISOS Y PANTALLA ENCENDIDA =====
@@ -974,8 +1014,12 @@ function pitchSVG() {
     <rect x="14" y="1.5" width="40" height="14.5"/><rect x="24.8" y="1.5" width="18.4" height="5"/><path d="M27 16a8 8 0 0 0 14 0"/>
     <rect x="14" y="74" width="40" height="14.5"/><rect x="24.8" y="83.5" width="18.4" height="5"/><path d="M27 74a8 8 0 0 1 14 0"/></g></svg>`;
 }
+// Colocación retocada a mano en el campo: solo el dibujo, se queda en el móvil (no va al Excel)
+const lookKey = m => `${m.sheetId}|${m.formation}`;
+const lookOf = m => (S.look || {})[lookKey(m)] || {};
 function pitch(m, mode, comp) {
-  const F = FORMATIONS[m.formation] || FORMATIONS[DEFAULT_FORMATION];
+  const F = { ...(FORMATIONS[m.formation] || FORMATIONS[DEFAULT_FORMATION]) }; const adj = lookOf(m);
+  for (const k in adj) if (F[k]) F[k] = adj[k];
   const byId = rmap(m);
   const fieldMap = mode === 'live' ? comp.field : m.lineup;
   let html = '';
@@ -998,7 +1042,7 @@ function sizeSeg(m) {
 }
 function formationChips(m) {
   const n = fSize(m.formation);
-  return `<div class="chips scroll">${Object.keys(FORMATIONS).filter(f => fSize(f) === n).map(f => `<button class="chip ${m.formation === f ? 'on' : ''}" data-act="formation" data-v="${f}">${f}</button>`).join('')}</div>`;
+  return `<div class="chips scroll">${Object.keys(FORMATIONS).filter(f => fSize(f) === n && (!DYN.has(f) || f === m.formation)).map(f => `<button class="chip ${m.formation === f ? 'on' : ''}" data-act="formation" data-v="${f}">${f}</button>`).join('')}</div>`;
 }
 function onceView(m) {
   const byId = rmap(m);
@@ -1010,8 +1054,8 @@ function onceView(m) {
     ${field('Sistema tal y como lo apuntas en el Excel', inp('formationText', m.formationText, `placeholder="${esc(m.formation)}"`))}
     <div class="sumline"><b class="big">${nPlaced}</b>/${fSize(m.formation)} titulares <span class="sp"></span>${nPlaced < Object.keys(FORMATIONS[m.formation] || {}).length && !isLocked(m) ? '<button class="btn sm" data-act="suggestOnce">Sugerir once</button>' : ''}${nPlaced ? '<button class="btn ghost sm" data-act="clearOnce">Vaciar</button>' : ''}</div>
     ${captainLine(m)}
-    ${pitch(m, 'once')}
-    <p class="muted small center">Toca un hueco para colocar a una jugadora. Tócala otra vez para cambiarla o hacerla capitana.</p>
+    <div class="oncepitch">${pitch(m, 'once')}</div>
+    <p class="muted small center">Toca un hueco para colocar a una jugadora. Tócala otra vez para cambiarla o hacerla capitana. Mantén pulsado y arrastra para moverla por el campo (solo cambia el dibujo).${Object.keys(lookOf(m)).length ? ' <button class="link small" data-act="lookReset">Volver a la colocación del sistema</button>' : ''}</p>
     <h3 class="h3">Suplentes <span class="muted">${bench.length}</span></h3>
     <div class="benchrow">${bench.map(p => `<span class="bchip"><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}</span>`).join('') || '<span class="muted small">Nadie en el banquillo</span>'}</div>
     
@@ -2084,7 +2128,8 @@ const ACT = {
   },
   formation(el) { const m = cur(); m.formation = el.dataset.v; if (!m.formationText || Object.keys(FORMATIONS).includes(m.formationText)) m.formationText = ''; touch(m); if (UI.sheet && UI.sheet.type === 'form') closeSheet(); },
   formSheet() { openSheet({ type: 'form' }); },
-  slot(el) { openSheet({ type: 'slot', slot: el.dataset.slot }); },
+  slot(el) { if (lpFired()) return; openSheet({ type: 'slot', slot: el.dataset.slot }); },
+  lookReset() { const m = cur(); if (S.look) delete S.look[lookKey(m)]; persist(); render(); },
   pickSlot(el) { const m = cur(); const sl = UI.sheet.slot; for (const k in m.lineup) if (m.lineup[k] === el.dataset.id) delete m.lineup[k]; m.lineup[sl] = el.dataset.id; closeSheet(); touch(m); },
   unslot() { const m = cur(); const id = m.lineup[UI.sheet.slot]; delete m.lineup[UI.sheet.slot]; if (m.captain === id) m.captain = null; closeSheet(); touch(m); },
   setCap(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; m.capManual = true; closeSheet(); touch(m); },
@@ -2273,6 +2318,7 @@ document.addEventListener('click', ev => {
 });
 document.addEventListener('focusin', ev => { if (ev.target.dataset && ev.target.dataset.locked) { ev.target.blur(); ACT.unlock(); } });
 document.addEventListener('change', ev => {
+  if (ev.target.dataset && ev.target.dataset.bind === 'formationText') { const m = cur(); if (m) applyFormationText(m); }
   const el = ev.target;
   if (el.classList && el.classList.contains('teamsel')) { ACT.teamPick(el); return; }
   if (el.dataset && el.dataset.capord) { const o = [...captainsOrder()]; o[+el.dataset.capord] = el.value ? up(el.value) : ''; S.settings.captains = o.filter(Boolean); saveAppConfig(); const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); return; }
@@ -2296,7 +2342,7 @@ document.addEventListener('input', ev => {
     { const mm = path.match(/^rival\.players\.(\d+)\./); if (mm && m.rival.players[+mm[1]]) m.rival.players[+mm[1]].fed = false; }
     if (path === 'info.hora') { m.info.cit = citOf(v); const o = document.getElementById('citOut'); if (o) o.textContent = m.info.cit || '—'; }
     m.dirty = true; persist();
-    const chip = document.querySelector('.top .sync'); if (chip && mcpState !== 'none' && !chip.classList.contains('dirty') && UI.sync !== 'saving') chip.outerHTML = '<button class="sync dirty" data-act="save">Guardar en Excel</button>';
+    const chip = document.querySelector('.top .sync'); if (chip && mcpState !== 'none' && !chip.classList.contains('dirty') && UI.sync !== 'saving') chip.outerHTML = '<button class="sync dirty" data-act="save">Guardar</button>';
   } else if (el.dataset.sbind && UI.sheet) {
     UI.sheet[el.dataset.sbind] = el.value;
   } else if (el.dataset.ov) {

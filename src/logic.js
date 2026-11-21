@@ -76,10 +76,66 @@ function fmtFecha(iso) {
 const stripH = s => str(s).replace(/h$/i, '').trim();
 const addH = s => { s = str(s); return s ? s + 'h' : ''; };
 
+// Sistemas que no están en la lista: se colocan solos a partir de los números (p. ej. 1.3.5.1.1)
+const DYN = new Set();
+const sum = a => a.reduce((x, y) => x + y, 0);
+function buildFormation(lines) {
+  const k = lines.length; if (k < 2 || k > 5 || lines.some(c => c < 1 || c > 6)) return null;
+  const tot = sum(lines); if (tot < 6 || tot > 10) return null;
+  const XS = { 1: [50], 2: [38, 62], 3: [28, 50, 72], 4: [15, 38, 62, 85], 5: [12, 31, 50, 69, 88], 6: [10, 26, 42, 58, 74, 90] };
+  const spots = []; // {li, j, c, x, y}
+  lines.forEach((c, li) => {
+    const base = 20 + li * (64 / (k - 1)); const role = li === 0 ? 'def' : li === k - 1 ? 'att' : 'mid';
+    const xs = role === 'att' && c === 3 ? [17, 50, 83] : XS[c];
+    xs.forEach((x, j) => {
+      const outer = j === 0 || j === c - 1; let y = base;
+      if (role === 'def') y += c >= 4 ? (outer ? 5 : -1) : c === 3 && !outer ? -3 : 0;
+      if (role === 'mid') y += c >= 4 ? (outer ? 4 : -2) : c === 3 && !outer ? -6 : 0;
+      if (role === 'att') y += c === 3 && outer ? -8 : 0;
+      spots.push({ li, j, c, x, y: Math.max(14, Math.min(88, Math.round(y))), role });
+    });
+  });
+  const mids = [...new Set(spots.filter(s => s.role === 'mid').map(s => s.li))];
+  const pref = s => {
+    const { j, c, role, li } = s; const L = j < (c - 1) / 2, R = j > (c - 1) / 2;
+    if (role === 'def') return ({ 1: [[5]], 2: [[5], [4]], 3: [[6], [5], [4]], 4: [[3], [5], [4], [2]], 5: [[3], [6], [5], [4], [2]] }[c] || [])[j] || [];
+    if (role === 'att') return ({ 1: [[9]], 2: [[10, 11], [9]], 3: [[11], [9], [7]], 4: [[11], [10], [9], [7]] }[c] || [])[j] || [];
+    const first = li === mids[0], last = li === mids[mids.length - 1] && mids.length > 1;
+    if (c >= 4 && (j === 0 || j === c - 1)) return lines[0] <= 3 ? (L ? [3, 11] : [2, 7]) : (L ? [11, 3, 7] : [7, 2, 11]);
+    const cen = c >= 4 ? c - 2 : c; const jj = c >= 4 ? j - 1 : j; const cL = jj < (cen - 1) / 2, cR = jj > (cen - 1) / 2;
+    if (last) return cen === 1 ? [10, 8, 6] : cen === 3 ? (cL ? [11, 10] : cR ? [7, 8] : [10, 8]) : (cL ? [10, 11, 8] : [8, 7, 10]);
+    return cen === 1 ? [6, 10, 8] : cen === 2 ? (cL ? [8, 6, 10] : [6, 8, 10]) : cen === 3 ? (cL ? [10, 8] : cR ? [8, 10] : [6, 8]) : (cL ? [8, 10] : [6, 8]);
+  };
+  const used = new Set([1]); const F = { 1: [50, 6] };
+  // orden: defensa, ataque, bandas del medio y el centro del campo (primero la línea más retrasada, luego la más adelantada)
+  const rk = s => s.li === mids[0] ? 0 : s.li === mids[mids.length - 1] ? 1 : 2;
+  const wideM = s => s.role === 'mid' && s.c >= 4 && (s.j === 0 || s.j === s.c - 1);
+  const order = [...spots.filter(s => s.role === 'def'), ...spots.filter(s => s.role === 'att'), ...spots.filter(wideM),
+    ...spots.filter(s => s.role === 'mid' && !wideM(s)).sort((a, b) => rk(a) - rk(b) || a.j - b.j)];
+  const FB = { def: [4, 5, 2, 3, 6, 8], att: [9, 10, 11, 7, 8, 6], mid: [8, 6, 10, 7, 11, 3, 2, 4, 5, 9] };
+  for (const s of order) {
+    let n = pref(s).find(x => !used.has(x));
+    const side = s.x < 45 ? 'L' : s.x > 55 ? 'R' : 'C';
+    const fb = s.role !== 'mid' ? FB[s.role] : side === 'L' ? [8, 10, 11, 3, 6, 7, 2] : side === 'R' ? [6, 8, 7, 2, 10, 11, 3] : FB.mid;
+    if (n == null) n = [...fb, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].find(x => !used.has(x));
+    used.add(n); F[n] = [s.x, s.y];
+  }
+  return F;
+}
+function ensureFormation(key) {
+  if (FORMATIONS[key]) return key;
+  const d = String(key || '').split('.').map(Number); if (d[0] !== 1 || d.some(isNaN)) return null;
+  const F = buildFormation(d.slice(1)); if (!F) return null;
+  FORMATIONS[key] = F; DYN.add(key); return key;
+}
 function guessFormation(text) {
   const first = str(text).split(/\s+-\s+/)[0];
-  const digits = (first.match(/\d/g) || []).join('.');
-  return FORMATIONS[digits] ? digits : null;
+  const d = (first.match(/\d/g) || []).map(Number);
+  if (FORMATIONS[d.join('.')]) return d.join('.');
+  let lines = null;
+  if (d[0] === 1 && sum(d) - 1 >= 6 && sum(d) - 1 <= 10) lines = d.slice(1);
+  else if (sum(d) >= 6 && sum(d) <= 10) lines = d;
+  return lines ? ensureFormation('1.' + lines.join('.')) : null;
 }
 
 // Valoraciones del campo (fila VALORACIONES del Excel): clave, cabecera en el Excel, texto en la app
@@ -463,4 +519,4 @@ function aggregate(summaries) {
   return { games, team, gamesMin, players: Object.values(byP) };
 }
 
-if (typeof module !== 'undefined') module.exports = { FORMATIONS, fSize, VAL_FIELDS, positionStats, slotScore, suggestLineup, nextCaptain, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };
+if (typeof module !== 'undefined') module.exports = { FORMATIONS, DYN, ensureFormation, buildFormation, fSize, VAL_FIELDS, positionStats, slotScore, suggestLineup, nextCaptain, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };
