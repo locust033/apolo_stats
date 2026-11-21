@@ -426,3 +426,18 @@ nav.bottom button.on .ic { color: var(--accent); }
 .poschip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-weight: 700; letter-spacing: .02em; border-radius: 999px; background: color-mix(in srgb, var(--line) 55%, transparent); font-size: 13px; }
 .poschip b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 11.5px; }
 .tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
+/* Flechas de pasos */
+.stepbar { display: flex; gap: 6px; align-items: stretch; }
+.stepbar .stephead { flex: 1; min-width: 0; }
+.stepnav { flex: none; width: 42px; min-height: 42px; border-radius: 12px; border: 1.5px solid var(--line); background: transparent; display: grid; place-items: center; color: var(--ink); padding: 0; }
+.stepnav:disabled { opacity: .3; }
+.stepnav .ic { width: 20px; height: 20px; }
+/* Capitana por turno */
+.capline { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 6px 0 10px; }
+.capline > span { flex: 1; min-width: 0; }
+.capline .cap.inl { flex: none; }
+.capline .cap.inl { position: static; }
+/* Lista de jugadoras con su posición habitual */
+.plist button .pi { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; }
+.plist button .pi small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.plist button.sug .pi small { color: var(--good); font-weight: 700; }

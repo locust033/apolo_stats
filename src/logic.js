@@ -334,6 +334,62 @@ function summarize(sheet, L, away = false) {
   };
 }
 
+// ---- Posiciones por jugadora (para sugerir el once) ----
+// Huecos que son «la misma posición» en el sistema habitual 1.4.2.3.1: 4/5 centrales, 6/8 mediocentros
+const SAME_POS = { 4: [5], 5: [4], 6: [8], 8: [6] };
+// minutos (y partidos) de cada jugadora en cada hueco. Si una jugadora pasó por varios, los minutos se reparten a partes iguales.
+function positionStats(summaries) {
+  const out = {};
+  for (const g of summaries.filter(s => s.played)) {
+    const noMin = !g.players.some(p => p.min > 0);
+    for (const p of g.players) {
+      const pos = [...new Set(String(p.pos || '').split(/\s+/).filter(x => /^\d+$/.test(x)))];
+      if (!pos.length) continue;
+      const o = out[p.key] || (out[p.key] = {});
+      for (const sl of pos) {
+        const x = o[sl] || (o[sl] = { min: 0, games: 0 });
+        x.games++; if (!noMin) x.min += (p.min || 0) / pos.length;
+      }
+    }
+  }
+  for (const k in out) for (const sl in out[k]) out[k][sl].min = Math.round(out[k][sl].min);
+  return out;
+}
+// puntuación de una jugadora para un hueco: minutos ahí + la mitad de lo jugado en el hueco equivalente (+ partidos, para la J sin minutos)
+function slotScore(ps, key, slot) {
+  const o = ps[key] || {}; const own = o[slot] || { min: 0, games: 0 };
+  let sc = own.min + own.games * 10;
+  for (const e of SAME_POS[slot] || []) { const x = o[e]; if (x) sc += (x.min + x.games * 10) / 2; }
+  return sc;
+}
+// Once sugerido: rellena los huecos vacíos con las convocadas que más han jugado en cada posición.
+// La portería solo se sugiere a quien ha jugado de portera; si no hay ninguna convocada, se queda vacía.
+function suggestLineup(ps, slots, candidates, lineup = {}) {
+  const used = new Set(Object.values(lineup)); const res = { ...lineup };
+  const free = slots.filter(sl => !res[sl]);
+  const pairs = [];
+  for (const sl of free) for (const c of candidates) {
+    if (used.has(c.id)) continue;
+    const sc = slotScore(ps, c.key, +sl); if (sc > 0) pairs.push([sc, sl, c.id]);
+  }
+  pairs.sort((a, b) => b[0] - a[0]);
+  for (const [, sl, id] of pairs) { if (res[sl] || used.has(id)) continue; res[sl] = id; used.add(id); }
+  return res;
+}
+// Capitanas por turno: después de la última que llevó el brazalete, la siguiente convocada de la lista
+function nextCaptain(summaries, curN, order, calledKeys) {
+  const norm = x => noacc(String(x || '').toUpperCase()).trim();
+  const ord = order.map(norm); const called = new Set(calledKeys.map(norm));
+  let last = -1;
+  for (const g of summaries.filter(s => s.played && s.n < curN).sort((a, b) => b.n - a.n)) {
+    const c = g.players.find(p => p.cap && ord.includes(norm(p.key)));
+    if (c) { last = ord.indexOf(norm(c.key)); break; }
+  }
+  const start = (last + 1) % ord.length;
+  for (let i = 0; i < ord.length; i++) { const k = ord[(start + i) % ord.length]; if (called.has(k)) return { key: k, turn: ord[start], skipped: i > 0 }; }
+  return null;
+}
+
 function aggregate(summaries) {
   const games = summaries.filter(s => s.played).sort((a, b) => a.n - b.n);
   const team = { pj: 0, w: 0, d: 0, l: 0, gf: 0, gc: 0, pts: 0, cs: 0, gf1: 0, gf2: 0, gc1: 0, gc2: 0, tramosF: [0,0,0,0,0,0], tramosC: [0,0,0,0,0,0] };
@@ -365,4 +421,4 @@ function aggregate(summaries) {
   return { games, team, gamesMin, players: Object.values(byP) };
 }
 
-if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };
+if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, positionStats, slotScore, suggestLineup, nextCaptain, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };

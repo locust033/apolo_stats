@@ -21,7 +21,7 @@ function persist() {
 const H = () => +S.settings.half || 45;
 const cur = () => (S.current != null ? S.matches[S.current] : null);
 const sheetById = id => S.sheets.find(s => String(s.id) === String(id));
-function touch(m, rerender = true) { if (m) m.dirty = true; persist(); if (rerender) render(); }
+function touch(m, rerender = true) { if (m) { m.dirty = true; autoCaptain(m); } persist(); if (rerender) render(); }
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = s => document.querySelector(s);
@@ -284,7 +284,7 @@ async function openMatch(id, { reload = false } = {}) {
   const mm0 = S.matches[id];
   if (mm0 && !reload && ready() && !mm0.finalized) readRows(sh.title).then(rows => { if (infoFromLayout(mm0, parseLayout(rows))) { persist(); render(); } }).catch(() => {});
   const mm = S.matches[id];
-  if (mm) { prefillRival(mm); if (!mm.finalized) S.ui.step = autoStep(mm); }
+  if (mm) { prefillRival(mm); autoCaptain(mm); if (!mm.finalized) S.ui.step = autoStep(mm); }
   render();
 }
 // Paso en el que se abre una jornada: el siguiente pendiente
@@ -523,6 +523,7 @@ async function loadStats(force = false) {
   if (FFCV_SNAP == null) await loadFfcv();
   S.stats.at = Date.now(); UI.statsProgress = null;
   if (fails) UI.err.stats = `${fails} hoja${fails > 1 ? 's' : ''} con un formato que no reconozco.`;
+  { const m = cur(); if (m && autoCaptain(m)) m.dirty = true; }
   persist(); render();
 }
 
@@ -712,7 +713,8 @@ function matchView(m) {
   const step = S.ui.step;
   const si = STEPS.findIndex(([k]) => k === step);
   const chevS = `<svg viewBox="0 0 24 24" class="ic chev ${S.ui.stepsOpen ? 'up' : ''}"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const tabs = `<div class="stepwrap"><button class="stephead" data-act="stepsToggle" aria-expanded="${!!S.ui.stepsOpen}"><i>${si + 1}</i><b>${STEPS[si][1]}</b><span class="sp"></span><span class="rl">${S.ui.stepsOpen ? 'Ocultar' : 'Pasos'}</span>${chevS}</button>
+  const arrow = (dir, d) => `<button class="stepnav" data-act="stepGo" data-v="${dir}" ${(dir < 0 ? si === 0 : si === STEPS.length - 1) ? 'disabled' : ''} aria-label="${dir < 0 ? 'Paso anterior' : 'Paso siguiente'}"><svg viewBox="0 0 24 24" class="ic"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
+  const tabs = `<div class="stepwrap"><div class="stepbar">${arrow(-1, 'M15 5l-7 7 7 7')}<button class="stephead" data-act="stepsToggle" aria-expanded="${!!S.ui.stepsOpen}"><i>${si + 1}</i><b>${STEPS[si][1]}</b><span class="sp"></span><span class="rl">${S.ui.stepsOpen ? 'Ocultar' : 'Pasos'}</span>${chevS}</button>${arrow(1, 'M9 5l7 7-7 7')}</div>
     ${S.ui.stepsOpen ? `<div class="steps">${STEPS.map(([k, l], i) => `<button class="${step === k ? 'on' : ''}" data-act="step" data-v="${k}"><i>${i + 1}</i>${l}</button>`).join('')}</div>` : ''}</div>`;
   const loading = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
   const err = UI.err.match ? `<div class="banner err">${esc(UI.err.match)} <button class="link" data-act="reloadJ">Reintentar</button></div>` : '';
@@ -795,6 +797,7 @@ function convView(m) {
       <button class="btn wide" data-act="addExtra">Añadir a la convocatoria</button>
       ${pool.length ? `<div class="chips">${pool.map((x, i) => `<button class="chip" data-act="addPool" data-i="${S.extrasPool.indexOf(x)}">+ ${esc(title(x.name))} · ${esc(x.dorsal)}</button>`).join('')}</div>` : ''}
     </div>
+    ${captainLine(m)}
     ${nextBtn('once', 'Elegir el once')}`;
 }
 
@@ -831,7 +834,8 @@ function onceView(m) {
   const nPlaced = Object.values(m.lineup).filter(id => m.called[id]).length;
   return `${lockBar(m)}${formationChips(m)}
     ${field('Sistema tal y como lo apuntas en el Excel', inp('formationText', m.formationText, `placeholder="${esc(m.formation)}"`))}
-    <div class="sumline"><b class="big">${nPlaced}</b>/11 titulares <span class="sp"></span><span class="muted small">Capitana: <b>${m.captain && byId[m.captain] ? esc(title(byId[m.captain].name)) : 'sin elegir'}</b></span></div>
+    <div class="sumline"><b class="big">${nPlaced}</b>/11 titulares <span class="sp"></span>${nPlaced < Object.keys(FORMATIONS[m.formation] || {}).length && !isLocked(m) ? '<button class="btn sm" data-act="suggestOnce">Sugerir once</button>' : ''}${nPlaced ? '<button class="btn ghost sm" data-act="clearOnce">Vaciar</button>' : ''}</div>
+    ${captainLine(m)}
     ${pitch(m, 'once')}
     <p class="muted small center">Toca un hueco para colocar a una jugadora. Tócala otra vez para cambiarla o hacerla capitana.</p>
     <h3 class="h3">Suplentes <span class="muted">${bench.length}</span></h3>
@@ -1168,6 +1172,7 @@ function settingsView() {
     ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
     <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
     <p class="muted small">Conexión: ${ready() ? `conectada con tu cuenta de Google (la sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; luego se renueva al guardar)` : 'sin sesión'}${UI.err.sheets ? ' · ' + esc(UI.err.sheets) : ''}</p></div>
+    ${captainsCard()}
     ${avisosCard()}
     <div class="card"><h3 class="h3">Cómo se rellena el Excel</h3>
     <ul class="howto"><li><b>TITULAR</b>: en el once inicial. <b>SUPLENTE</b>: convocada que empieza en el banquillo.</li>
@@ -1250,6 +1255,21 @@ async function setAvisosKeyApp(key, val) {
   await writeVals(i >= 0 ? `'AVISOS'!A${i + 1}:B${i + 1}` : `'AVISOS'!A${rows.length + 1}:B${rows.length + 1}`, [[key, val]]);
 }
 
+function captainsCard() {
+  const m = cur(); const names = [...new Set([...(m ? m.roster.map(p => p.name) : []), ...captainsOrder()])];
+  const ord = captainsOrder();
+  return `<div class="card"><h3 class="h3">Capitanas por turno</h3>
+    <p class="muted small">En cada partido lleva el brazalete la siguiente de la lista a la última que lo llevó. Si no está convocada, pasa a la siguiente.</p>
+    ${[0, 1, 2].map(i => field(`${i + 1}ª`, `<select data-capord="${i}">${names.map(n => `<option ${nkey(ord[i] || '') === nkey(n) ? 'selected' : ''}>${esc(title(n))}</option>`).join('')}</select>`)).join('')}</div>`;
+}
+// Minutos por posición en la temporada (si jugó en varias en un partido, se reparten a partes iguales)
+function posBars(key) {
+  const o = posStats()[key] || {}; const agg = {};
+  for (const [sl, x] of Object.entries(o)) { const ab = POS_NAME[+sl] || sl; const a = agg[ab] || (agg[ab] = { min: 0, games: 0 }); a.min += x.min; a.games += x.games; }
+  const rows = Object.entries(agg).sort((a, b) => b[1].min - a[1].min || b[1].games - a[1].games);
+  if (!rows.length) return '';
+  return `<div class="eyebrow">Minutos por posición</div>${bars(rows.map(([ab, x]) => ({ l: `${ab} · ${x.games} partido${x.games > 1 ? 's' : ''}`, v: x.min })), v => v + "'")}`;
+}
 // Ficha de una jugadora: una fila desplegable por jornada (barra de minutos + iconos), con el detalle dentro
 // Posiciones según los huecos del sistema habitual (1.4.2.3.1)
 const POS_NAME = { 1: 'POR', 2: 'LD', 3: 'LI', 4: 'DFC', 5: 'DFC', 6: 'MCD', 7: 'ED', 8: 'MCD', 9: 'DC', 10: 'MCO', 11: 'EI' };
@@ -1285,6 +1305,56 @@ function playerGames(p, A) {
   }).join('')}</div>`;
 }
 
+// ===== CAPITANAS POR TURNO Y ONCE SUGERIDO =====
+const CAPTAINS_DEFAULT = ['INÉS', 'CLAUDIA', 'ÁNGELA'];
+const captainsOrder = () => (S.settings.captains && S.settings.captains.length ? S.settings.captains : CAPTAINS_DEFAULT);
+const nkey = x => noacc(up(x)).trim();
+const statSums = () => S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean);
+// La que le toca por turno (si está convocada; si no, la siguiente). Devuelve { id, turnName, skipped }
+function captainTurn(m) {
+  const called = m.roster.filter(p => m.called[p.id]);
+  const r = nextCaptain(statSums(), sheetShort(m.title).n, captainsOrder(), called.map(p => p.name));
+  if (!r) return { id: null, turnName: captainsOrder()[0], skipped: true, none: true };
+  const p = called.find(p => nkey(p.name) === r.key);
+  const turnP = captainsOrder().find(x => nkey(x) === r.turn) || r.turn;
+  return { id: p ? p.id : null, turnName: turnP, skipped: r.skipped };
+}
+// Pone sola a la capitana del turno mientras no la elijas tú a mano (solo antes de empezar el partido)
+function autoCaptain(m) {
+  if (!m || m.finalized || m.capManual || (m.clock && m.clock.phase !== 'pre') || !Object.keys(S.stats.sums).length) return false;
+  const t = captainTurn(m);
+  if (t.id && m.captain !== t.id) { m.captain = t.id; return true; }
+  if (!t.id && m.captain && !m.called[m.captain]) { m.captain = null; return true; }
+  return false;
+}
+function captainLine(m) {
+  const byId = rmap(m); const t = captainTurn(m); const c = m.captain && byId[m.captain] ? title(byId[m.captain].name) : '';
+  if (m.capManual) return `<div class="capline"><i class="cap inl">C</i> <span>${c ? `<b>${esc(c)}</b> · elegida a mano` : 'Sin capitana'}</span> <button class="link small" data-act="capAuto">Volver al turno</button></div>`;
+  if (!c) return `<div class="capline"><i class="cap inl">C</i> <span class="muted">Ninguna de las capitanas (${captainsOrder().map(x => esc(title(x))).join(', ')}) está convocada.</span></div>`;
+  return `<div class="capline"><i class="cap inl">C</i> <span><b>${esc(c)}</b> · le toca por turno${t.skipped ? ` <span class="muted">(${esc(title(t.turnName))} no está convocada)</span>` : ''}</span></div>`;
+}
+// Estadística de posiciones de la temporada y sugerencias para cada hueco
+const posStats = () => positionStats(statSums());
+function slotInfo(ps, name, slot) {
+  const o = ps[up(name)] || {}; const x = o[slot];
+  const ab = POS_NAME[+slot] || slot;
+  if (x) return `${ab}: ${x.min ? x.min + "'" : ''}${x.min ? ' · ' : ''}${x.games} partido${x.games > 1 ? 's' : ''}`;
+  const eq = (SAME_POS_UI[+slot] || []).map(e => o[e]).filter(Boolean);
+  if (eq.length) return `${ab} (otro lado): ${eq.reduce((a, b) => a + b.games, 0)} partido${eq.reduce((a, b) => a + b.games, 0) > 1 ? 's' : ''}`;
+  const best = Object.entries(o).sort((a, b) => b[1].min - a[1].min || b[1].games - a[1].games)[0];
+  return best ? `Suele jugar de ${POS_NAME[+best[0]] || best[0]}` : 'Sin datos de posición';
+}
+const SAME_POS_UI = { 4: [5], 5: [4], 6: [8], 8: [6] };
+function slotCandidates(m, slot, ids) {
+  const ps = posStats(); const byId = rmap(m);
+  return ids.map(id => ({ id, sc: slotScore(ps, up(byId[id].name), +slot) })).sort((a, b) => b.sc - a.sc).map(x => x.id);
+}
+function plistInfo(m, ids, act, slot) {
+  const byId = rmap(m); const ps = posStats();
+  return `<div class="plist">${ids.map(id => byId[id]).filter(Boolean).map(p => { const sc = slotScore(ps, up(p.name), +slot);
+    return `<button data-act="${act}" data-id="${esc(p.id)}" class="${sc > 0 ? 'sug' : ''}"><span class="disc">${esc(p.dorsal)}</span><span class="pi"><b>${esc(title(p.name))}</b><small>${esc(slotInfo(ps, p.name, slot))}</small></span></button>`; }).join('')}</div>`;
+}
+
 // ===== HOJA INFERIOR (diálogos) =====
 function openSheet(s) { UI.sheet = s; renderSheet(); }
 function closeSheet() { UI.sheet = null; renderSheet(); }
@@ -1313,7 +1383,7 @@ function renderSheet() {
       const free = m.roster.filter(p => m.called[p.id] && !placed.has(p.id)).map(p => p.id);
       h = id ? `${n(id)} · hueco ${s.slot}` : `Hueco ${s.slot}`;
       body = (id ? `<div class="acts"><button class="btn ${m.captain === id ? 'on' : ''}" data-act="setCap" data-id="${esc(id)}">${IC.star} ${m.captain === id ? 'Es la capitana' : 'Hacer capitana'}</button><button class="btn" data-act="unslot">Quitar del once</button></div><h4 class="h4">Cambiar por</h4>` : '<h4 class="h4">¿Quién juega aquí?</h4>')
-        + (free.length ? plist(m, free, 'pickSlot') : '<p class="muted small">No quedan convocadas libres.</p>');
+        + (free.length ? plistInfo(m, slotCandidates(m, s.slot, free), 'pickSlot', s.slot) + '<p class="muted small">Ordenadas por lo que han jugado en esta posición esta temporada.</p>' : '<p class="muted small">No quedan convocadas libres.</p>');
       break;
     }
     case 'enter': {
@@ -1418,6 +1488,7 @@ function renderSheet() {
       body = `<div class="tiles small">${[['Min', p.min], ['Goles', p.g], ['Asist.', p.a], ['MVP', p.mvp]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
         <div class="tiles small two">${[['Goles por partido', avg(p.g)], ['Tarjetas por partido', avg((p.ta || 0) + (p.tr || 0))]].map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
         <p class="muted small">Media sobre ${p.pj === 1 ? '1 partido jugado' : p.pj + ' partidos jugados'}.</p>
+        ${posBars(p.key)}
         <div class="eyebrow">Por jornada</div>${playerGames(p, A)}`;
       break;
     }
@@ -1431,6 +1502,7 @@ const ACT = {
   noop() {},
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
+  stepGo(el) { const i = STEPS.findIndex(([k]) => k === S.ui.step) + +el.dataset.v; if (i < 0 || i >= STEPS.length) return; S.ui.step = STEPS[i][0]; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
   stepsToggle() { S.ui.stepsOpen = !S.ui.stepsOpen; persist(); render(); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
   openJ(el) { if (el.dataset.go) { S.ui.tab = "match"; } UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
@@ -1455,7 +1527,20 @@ const ACT = {
   askEditStats() { openSheet({ type: 'confirm', title: 'Cambiar estadísticas', text: 'Estás a punto de cambiar las estadísticas de un partido finalizado (minutos, goles, tarjetas, MVP…). ¿Seguro?', ok: 'Sí, cambiar', act: 'editStatsOn' }); },
   editStatsOn() { const m = cur(); (UI.editStats = UI.editStats || {})[m.sheetId] = true; closeSheet(); render(); },
   editStatsOff() { const m = cur(); if (UI.editStats) delete UI.editStats[m.sheetId]; render(); },
-  setCapSum(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; touch(m); },
+  setCapSum(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; m.capManual = true; touch(m); },
+  capAuto() { const m = cur(); m.capManual = false; touch(m); },
+  suggestOnce() {
+    const m = cur(); const F = FORMATIONS[m.formation] || FORMATIONS[DEFAULT_FORMATION];
+    if (!Object.keys(S.stats.sums).length) { showToast('Primero tienen que cargar las estadísticas (pestaña Estadísticas).'); return; }
+    const cands = m.roster.filter(p => m.called[p.id]).map(p => ({ id: p.id, key: up(p.name) }));
+    const cur0 = Object.fromEntries(Object.entries(m.lineup).filter(([k, id]) => m.called[id] && F[k]));
+    const res = suggestLineup(posStats(), Object.keys(F), cands, cur0);
+    const added = Object.keys(res).length - Object.keys(cur0).length;
+    m.lineup = res; touch(m);
+    const left = Object.keys(F).length - Object.keys(res).length;
+    showToast(added ? `Sugeridas ${added} jugadora${added > 1 ? 's' : ''}${left ? `. Quedan ${left} hueco${left > 1 ? 's' : ''} sin sugerencia${!res[1] ? ' (portera no convocada)' : ''}` : ''}.` : 'No tengo sugerencias para los huecos libres.');
+  },
+  clearOnce() { const m = cur(); m.lineup = {}; touch(m); },
   askReopen() { openSheet({ type: 'confirm', title: 'Reabrir la jornada', text: 'Volverás a tener la convocatoria, el once, el directo y el cierre como en una jornada sin terminar. Lo apuntado no se borra. Cuando acabes, vuelve a pulsar «Finalizar jornada».', ok: 'Reabrir', act: 'doReopen' }); },
   doReopen() { const m = cur(); m.finalized = false; S.ui.step = 'cierre'; closeSheet(); touch(m); },
   unlock() { UI.pendingAct = null; openSheet({ type: 'confirm', title: 'Desbloquear estadísticas', text: 'Este partido ya terminó. Al desbloquear podrás cambiar convocatoria, minutos, goles, tarjetas y MVP; los cambios se escriben en el Excel cuando guardes.', ok: 'Desbloquear', act: 'unlockGo' }); },
@@ -1490,7 +1575,7 @@ const ACT = {
   close() { closeSheet(); },
   ffcvFill() { const m = cur(); applyFfcv(m, true); touch(m); },
   // convocatoria
-  toggleCall(el, ev) { if (ev.target.closest('[data-act="rmExtra"]')) return; const m = cur(); const id = el.dataset.id; m.called[id] = !m.called[id]; if (!m.called[id]) { for (const k in m.lineup) if (m.lineup[k] === id) delete m.lineup[k]; if (m.captain === id) m.captain = null; } touch(m); },
+  toggleCall(el, ev) { if (ev.target.closest('[data-act="rmExtra"]')) return; const m = cur(); const id = el.dataset.id; m.called[id] = !m.called[id]; if (!m.called[id]) { for (const k in m.lineup) if (m.lineup[k] === id) delete m.lineup[k]; if (m.captain === id) { m.captain = null; m.capManual = false; } } touch(m); },
   callAll() { const m = cur(); m.roster.forEach(p => (m.called[p.id] = true)); touch(m); },
   callNone() { const m = cur(); m.called = {}; m.lineup = {}; m.captain = null; touch(m); },
   addExtra() { const m = cur(); const name = up($('#xName').value), dorsal = str($('#xDorsal').value); if (!name) { $('#xName').focus(); return; }
@@ -1503,7 +1588,7 @@ const ACT = {
   slot(el) { openSheet({ type: 'slot', slot: el.dataset.slot }); },
   pickSlot(el) { const m = cur(); const sl = UI.sheet.slot; for (const k in m.lineup) if (m.lineup[k] === el.dataset.id) delete m.lineup[k]; m.lineup[sl] = el.dataset.id; closeSheet(); touch(m); },
   unslot() { const m = cur(); const id = m.lineup[UI.sheet.slot]; delete m.lineup[UI.sheet.slot]; if (m.captain === id) m.captain = null; closeSheet(); touch(m); },
-  setCap(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; closeSheet(); touch(m); },
+  setCap(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; m.capManual = true; closeSheet(); touch(m); },
   // rival
   rivalForm(el) {
     const m = cur(); const f = el.dataset.v; const cur0 = rivalForms(m);
@@ -1689,7 +1774,9 @@ document.addEventListener('click', ev => {
 });
 document.addEventListener('focusin', ev => { if (ev.target.dataset && ev.target.dataset.locked) { ev.target.blur(); ACT.unlock(); } });
 document.addEventListener('change', ev => {
-  const el = ev.target; const k = el.dataset && el.dataset.av; if (!k) return;
+  const el = ev.target;
+  if (el.dataset && el.dataset.capord) { const o = [...captainsOrder()]; o[+el.dataset.capord] = up(el.value); S.settings.captains = o; const m = cur(); if (m) { autoCaptain(m); } persist(); render(); return; }
+  const k = el.dataset && el.dataset.av; if (!k) return;
   if (k === 'martesOn') AV.cfg.martes = el.checked ? (AV.cfg.martes || '10:00') : '';
   else if (k === 'partido') AV.cfg.partido = el.checked ? '1' : '0';
   else AV.cfg[k] = el.value;
