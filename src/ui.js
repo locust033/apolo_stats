@@ -1,14 +1,10 @@
 // ===== ESTADO =====
-// Calendario FFCV del C.D. Apolo 'A' (Lliga Juvenil Caixa Popular Valenta, Grup 3, 26-27), en el orden de las hojas (sin jornadas de descanso)
-// [jornada FFCV, fecha, hora, local, visitante, campo, codacta]
-const FFCV = [[1, "17/10/2026", "19:30", "C.D. Apolo 'A'", "C.F. Aielo", "Campo de Fútbol Mpal. de Pinedo F-11", "26528241"], [2, "24/10/2026", "15:00", "U.D. Alzira 'A'", "C.D. Apolo 'A'", "Campo Mpal. Venecia F-11 Alzira ", "26528249"], [3, "31/10/2026", "12:30", "C.D. Apolo 'A'", "S.D. Sueca", "Campo de Fútbol Mpal. de Pinedo F-11", "26528256"], [4, "07/11/2026", "12:45", "Torrent C.F. 'A'", "C.D. Apolo 'A'", "Campo de Futbol Mpal. San Gregorio F-11 Campo B", "26528264"], [5, "14/11/2026", "17:15", "C.D. Apolo 'A'", "U.E. L'Alcúdia 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528271"], [6, "22/11/2026", "19:30", "U.D. Balompié Alfafar", "C.D. Apolo 'A'", "Campo Mpal. de Alfafar F-11", "26528279"], [8, "13/12/2026", "17:00", "C.F. Promeses Sueca", "C.D. Apolo 'A'", "Estadio Mpal. Antonio Puchades F-11", "26528294"], [9, "20/12/2026", "18:00", "C.D. Apolo 'A'", "P.D. Ayorense", "Campo de Fútbol Mpal. de Pinedo F-11", "26528301"], [10, "09/01/2027", "16:00", "Silla C.F. 'A'", "C.D. Apolo 'A'", "Polideportivo Mpal. Vicente Morera F-11 Silla", "26528309"], [11, "17/01/2027", "18:00", "C.D. Apolo 'A'", "U.D. Juventud - Bº Cristo 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528316"], [12, "23/01/2027", "12:00", "Ciutat de Xàtiva C.F.B. 'A'", "C.D. Apolo 'A'", "Campo Mpal. Paquito Coloma F-11 Xátiva ", "26528324"], [13, "31/01/2027", "18:00", "C.D. Apolo 'A'", "C.D. Malilla 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528331"], [14, "06/02/2027", "10:00", "C.F. Aielo", "C.D. Apolo 'A'", "Polideportivo Mpal. Juan Bataller Aielo F-11", "26528332"], [15, "14/02/2027", "18:00", "C.D. Apolo 'A'", "U.D. Alzira 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528340"], [16, "21/02/2027", "19:00", "S.D. Sueca", "C.D. Apolo 'A'", "Camp de L`Infantil Sueca F-11", "26528347"], [17, "28/02/2027", "18:00", "C.D. Apolo 'A'", "Torrent C.F. 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528355"], [18, "07/03/2027", "12:00", "U.E. L'Alcúdia 'A'", "C.D. Apolo 'A'", "Camp Els Arcs L`Alcudia F-11 Campo A", "26528362"], [19, "14/03/2027", "18:00", "C.D. Apolo 'A'", "U.D. Balompié Alfafar", "Campo de Fútbol Mpal. de Pinedo F-11", "26528370"], [21, "11/04/2027", "18:00", "C.D. Apolo 'A'", "C.F. Promeses Sueca", "Campo de Fútbol Mpal. de Pinedo F-11", "26528385"], [22, "17/04/2027", "17:30", "P.D. Ayorense", "C.D. Apolo 'A'", "Campo Mpal. San Anton F-11 Ayora ", "26528392"], [23, "25/04/2027", "18:00", "C.D. Apolo 'A'", "Silla C.F. 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528400"], [24, "09/05/2027", "11:30", "U.D. Juventud - Bº Cristo 'A'", "C.D. Apolo 'A'", "Campo Mpal. El Perdiguer F-11 Aldaia ", "26528407"], [25, "16/05/2027", "18:00", "C.D. Apolo 'A'", "Ciutat de Xàtiva C.F.B. 'A'", "Campo de Fútbol Mpal. de Pinedo F-11", "26528415"], [26, "23/05/2027", "12:00", "C.D. Malilla 'A'", "C.D. Apolo 'A'", "Campo de Futbol Mpal. Malilla F-11", "26528422"]];
-const APOLO_COD = '905446426';
-const FFCV_COMP = '905431657', FFCV_GRUPO = '905431660', FFCV_TEMP = '22';
+// La app no lleva datos de ningún equipo: jornadas, calendario, capitanas, etc. salen del Excel conectado
+// (pestañas de jornada y pestaña oculta «APP») y de la federación.
 const LS_KEY = 'apolo-partidos-v1';
-const SEED_SHEETS = [[1598450505,'1 - AIELO'],[1512215096,'2 - ALZIRA'],[1760258037,'3 - S.D. SUECA'],[143274566,'4 - TORRENT'],[471312833,'5 - ALCÚDIA'],[1947815952,'6 - ALFAFAR'],[1860936496,'7 - PROMESES'],[1736839393,'8 - AYORENSE'],[1082152474,'9 - SILLA'],[1197693661,'10 - Bº CRISTO'],[1492774495,'11 - XÀTIVA'],[1680599170,'12 - MALILLA'],[1471336960,'13 - AIELO'],[1891846995,'14 - ALZIRA'],[1252392307,'15 - SUECA'],[1224766389,'16 - TORRENT'],[1522889650,'17 - ALCÚDIA'],[2097235616,'18 - ALFAFAR'],[1251927104,'19 - PROMESES'],[2114525778,'20 - AYORENSE'],[1393940978,'21 - SILLA'],[1305304429,'22 - Bº CRISTO'],[104445972,'23 - XÀTIVA'],[1901217019,'24 - MALILLA']].map(([id,title])=>({id,title}));
 
 function defaultState() {
-  return { settings: { sid: DEFAULT_SID, half: 45, clientId: '' }, sheets: SEED_SHEETS, current: null, matches: {}, extrasPool: [], stats: { v: 3, at: 0, sums: {} },
+  return { settings: { sid: DEFAULT_SID, half: 45, clientId: '' }, sheets: [], current: null, matches: {}, extrasPool: [], stats: { v: 3, at: 0, sums: {} },
     ui: { tab: 'match', step: 'previa', stab: 'equipo', sort: 'min', dir: -1 } };
 }
 let S = defaultState();
@@ -165,15 +161,41 @@ function parseFfcvRows(rows) {
   return s.clas.length ? s : null;
 }
 // Equipo en la federación de cada Excel (el juvenil, fijo; los demás, el que se eligió al añadirlo)
-const ffcvCfg = () => S.settings.ffcv || (isLegacy() ? { t: FFCV_TEMP, c: FFCV_COMP, g: FFCV_GRUPO, team: APOLO_COD, name: "C.D. Apolo 'A'" } : null);
-const ourCod = () => (ffcvCfg() || {}).team || APOLO_COD;
+const ffcvCfg = () => S.settings.ffcv || null;
+const ourCod = () => (ffcvCfg() || {}).team || '';
+// Ajustes del equipo guardados en su propio Excel (pestaña oculta «APP»): equipo en la federación, capitanas, duración
+const APP_KEYS = ['ffcv', 'capMode', 'captains', 'half'];
+async function loadAppConfig() {
+  if (!S.settings.hasApp) { if (APP_KEYS.some(k => S.settings[k] != null && k !== 'half')) saveAppConfig(); return; }
+  try {
+    const rows = (await call('get_values', { range: `'APP'!A1:B50` }, { read: true })).values || [];
+    for (const [k, v] of rows) {
+      if (!APP_KEYS.includes(k) || v == null || v === '') continue;
+      if (k === 'ffcv' || k === 'captains') { try { S.settings[k] = JSON.parse(v); } catch (e) {} } else if (k === 'half') S.settings.half = +v || 45; else S.settings[k] = v;
+    }
+    persist();
+  } catch (e) {}
+}
+let appCfgTimer = null;
+function saveAppConfig() {
+  clearTimeout(appCfgTimer);
+  appCfgTimer = setTimeout(async () => {
+    if (!ready() || !sid()) return;
+    try {
+      if (!S.settings.hasApp) { await call('update_spreadsheet', { requests: [{ addSheet: { properties: { title: 'APP', hidden: true, gridProperties: { rowCount: 50, columnCount: 2 } } } }] }); S.settings.hasApp = true; }
+      const rows = [['ajuste', 'valor'], ...APP_KEYS.filter(k => S.settings[k] != null).map(k => [k, typeof S.settings[k] === 'object' ? JSON.stringify(S.settings[k]) : String(S.settings[k])])];
+      await call('clear_values', { range: `'APP'!A1:B50` });
+      await writeVals(`'APP'!A1:B${rows.length}`, rows);
+    } catch (e) {}
+  }, 600);
+}
 const isOurs = n => { const c = ffcvCfg(); return c && c.name ? rivalKey(n) === rivalKey(c.name) : /apolo/i.test(str(n)); };
 // Id del Excel principal (juvenil): ahí está la pestaña AVISOS que lee el proceso de GitHub
-const mainSid = () => (isLegacy() ? sid() : (Object.entries(S.profiles || {}).find(([, p]) => !p.settings || p.settings.legacy !== false) || [])[0]);
-const ffcvKey = () => (S.settings.legacy === false ? FFCV_KEY + ':' + sid() : FFCV_KEY);
+const mainSid = () => (S.settings.hasAvisos ? sid() : (Object.entries(S.profiles || {}).find(([, p]) => p.settings && p.settings.hasAvisos) || [])[0]);
+const ffcvKey = () => FFCV_KEY + ':' + sid();
 function loadFfcvCache() { try { FFCV_SNAP = JSON.parse(localStorage.getItem(ffcvKey()) || 'null'); } catch (e) {} }
 async function loadFfcv() {
-  if (!isLegacy()) {
+  if (!S.settings.hasFfcvTab) {
     const c = ffcvCfg(); if (!c) { FFCV_SNAP = null; return; }
     try {
       const r = await fetch(`data/ffcv/${c.team}.json?t=${Date.now()}`, { cache: 'no-store' });
@@ -221,10 +243,11 @@ async function initAuth() {
   if (!sid()) { S.ui.tab = 'settings'; UI.err.auth = 'Pega el enlace de tu Google Sheet en Ajustes.'; render(); return; }
   splashMsg('Leyendo el Excel…');
   await refreshSheets();
-  splashMsg('Calculando estadísticas…');
-  await loadStats(true);
+  await loadAppConfig();
   splashMsg('Datos de la federación…');
   await loadFfcv();
+  splashMsg('Calculando estadísticas…');
+  await loadStats(true);
   await importFfcvIfPending();
   let jq = null; try { jq = sessionStorage.getItem('apolo-j'); sessionStorage.removeItem('apolo-j'); } catch (e) {}
   if (location.search) history.replaceState(null, '', location.pathname);
@@ -240,7 +263,10 @@ async function initAuth() {
 async function refreshSheets() {
   try {
     const p = await call('get_spreadsheet', {}, { read: true });
-    const list = (p && p.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title })).filter(s => /^\s*\d+\s*-/.test(s.title));
+    const all = (p && p.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title }));
+    const tabs = all.map(x => x.title);
+    S.settings.hasAvisos = tabs.includes('AVISOS'); S.settings.hasFfcvTab = tabs.includes('FFCV'); S.settings.hasApp = tabs.includes('APP');
+    const list = all.filter(s => /^\s*\d+\s*-/.test(s.title));
     if (list.length) { S.sheets = list; }
     if (p && p.properties) S.settings.sheetTitle = p.properties.title;
     persist();
@@ -701,7 +727,7 @@ function topbar(m) {
   else if (m && m.dirty) chip = `<button class="sync dirty" data-act="save">Guardar en Excel</button>`;
   else if (m && m.savedAt) chip = `<span class="sync ok">Guardado ${timeAgo(m.savedAt)}</span>`;
   else chip = `<span class="sync ok">Al día con el Excel</span>`;
-  return `<header class="top"><div class="matchup"><span class="us">${esc(title(m ? m.team : 'C.D. Apolo').replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span><span class="vs">vs</span><span class="them">${esc(opp)}</span></div>${chip}</header>`
+  return `<header class="top"><div class="matchup"><span class="us">${esc(title(m ? m.team : '').replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span><span class="vs">vs</span><span class="them">${esc(opp)}</span></div>${chip}</header>`
     + (UI.sync === 'error' ? `<div class="banner err" role="alert">${esc(UI.syncMsg)} <button class="link" data-act="save">Reintentar</button></div>` : '')
     + (UI.err.auth ? `<div class="banner err">${esc(UI.err.auth)}</div>` : '')
     + (UI.err.ffcv ? `<div class="banner err">${esc(UI.err.ffcv)}</div>` : '')
@@ -736,6 +762,7 @@ function pickStartJornada() {
   return false;
 }
 function matchView(m) {
+  if (!sid() || (!S.sheets.length && !S.settings.build)) return `<section class="pad"><div class="card"><h3 class="h3">Sin equipo conectado</h3><p>${ready() ? 'Conecta el Google Sheet de tu equipo en Ajustes, o añade uno buscándolo en la federación.' : 'Entra con tu cuenta de Google y conecta el Excel de tu equipo en Ajustes.'}</p><button class="btn primary" data-act="tab" data-v="settings">Ir a Ajustes</button></div></section>`;
   if (S.settings.build) return `<section class="pad"><div class="card"><h3 class="h3">Preparando el Excel de ${esc((ffcvCfg() || {}).name || 'este equipo')}</h3><p>${UI.building ? ballSpin() + ' ' : ''}${esc(UI.buildMsg || 'Un momento…')}</p>${UI.building ? '' : '<button class="btn" data-act="buildCheck">Comprobar ahora</button>'}</div></section>`;
   if (!m) return jornadaRail() + `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
   if (m.finalized) {
@@ -758,13 +785,13 @@ const inp = (path, v, attrs = '') => `<input data-bind="${path}" value="${esc(v)
 const nextBtn = (to, label) => `<button class="btn primary wide" data-act="step" data-v="${to}">${label}</button>`;
 
 // Calendario del Apolo: el de la federación (pestaña FFCV, se actualiza solo) o, si no hay, el guardado en la app. Sin jornadas de descanso.
-const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c.length ? c : (S.settings.legacy === false ? [] : FFCV); };
+const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c; };
 const ffcvFor = m => { const f = ffcvCal()[sheetShort(m.title).n - 1]; return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
 const awayOf = t => { const f = ffcvCal()[sheetShort(t).n - 1]; return !!f && !isOurs(f[3]); };
 // convierte un marcador del Excel (local - visitante) a "nosotras - rival"
 const ourView = (s, away) => { const m = str(s).match(/(\d+)\s*-\s*(\d+)/); if (!m) return str(s); return away ? `${m[2]} - ${m[1]}` : `${m[1]} - ${m[2]}`; };
 const ffcvAppUrl = f => `https://resultadosffcv.isquad.es/partido.php?id_competition=${(ffcvCfg() || {}).c}&id_partido=${f.acta}&id_torneo=${(ffcvCfg() || {}).g}`;
-const ffcvWebUrl = f => { const c = ffcvCfg() || {}; return `https://ffcv.es/competiciones/?view=partidos&cod_temporada=${c.t || FFCV_TEMP}&cod_competicion=${c.c}&cod_grupo=${c.g}&cod_jornada=${f.j}#partidos`; };
+const ffcvWebUrl = f => { const c = ffcvCfg() || {}; return `https://ffcv.es/competiciones/?view=partidos&cod_temporada=${c.t || ''}&cod_competicion=${c.c}&cod_grupo=${c.g}&cod_jornada=${f.j}#partidos`; };
 const lugarFmt = s => up(str(s).replace(/Mpal\./gi, 'Municipal').replace(/\s*F-11\b/gi, '').replace(/`/g, "'").replace(/\s+/g, ' '));
 function ffcvBlock(m) {
   const f = ffcvFor(m); if (!f) return '';
@@ -1201,12 +1228,12 @@ function settingsView() {
       ? teamsBlock()
       : field('Google Sheet (pega el enlace)', `<input id="sidInput" value="" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off"><div class="acts"><button class="btn primary" data-act="saveSid">${S.settings.sid ? 'Añadir este equipo' : 'Conectar este Excel'}</button>${S.settings.sid ? '<button class="btn ghost" data-act="cancelSid">Cancelar</button>' : ''}</div>`)}
     ${UI.err.sid ? `<div class="banner err">${esc(UI.err.sid)}</div>` : ''}
-    ${field('Duración de cada parte', `<select data-bind="@settings.half">${[35, 40, 45].map(n => `<option value="${n}" ${+S.settings.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
+    ${field('Duración de cada parte', `<select data-bind="@settings.half">${[25, 30, 35, 40, 45].map(n => `<option value="${n}" ${+S.settings.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
     ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
     <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
     <p class="muted small">Conexión: ${ready() ? `conectada con tu cuenta de Google (la sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; luego se renueva al guardar)` : 'sin sesión'}${UI.err.sheets ? ' · ' + esc(UI.err.sheets) : ''}</p></div>
     ${captainsCard()}
-    ${isLegacy() ? avisosCard() : '<div class="card"><h3 class="h3">Avisos</h3><p class="muted small">Los avisos y los datos de la federación están preparados solo para el equipo juvenil.</p></div>'}
+    ${S.settings.hasAvisos ? avisosCard() : '<div class="card"><h3 class="h3">Avisos</h3><p class="muted small">Los avisos al móvil van con el Excel principal (el que tiene la pestaña AVISOS). Este equipo no la tiene.</p></div>'}
     <div class="card"><h3 class="h3">Cómo se rellena el Excel</h3>
     <ul class="howto"><li><b>TITULAR</b>: en el once inicial. <b>SUPLENTE</b>: convocada que empieza en el banquillo.</li>
     <li><b>MINUTOS</b>: se calculan con los cambios, rojas y el reloj (partes de ${H()}').</li>
@@ -1419,7 +1446,7 @@ async function addTeamGo() {
 async function templateRef() {
   const main = mainSid(); if (!main) return null;
   try { const meta = await call('get_spreadsheet', { sid: main }, { read: true }); const p = meta.sheets.map(x => x.properties).find(x => x.title === 'PLANTILLA'); if (p) return { sid: main, sheetId: p.sheetId, title: p.title }; } catch (e) {}
-  const sheets = isLegacy() ? S.sheets : ((S.profiles[main] || {}).sheets || []);
+  const sheets = main === sid() ? S.sheets : ((S.profiles[main] || {}).sheets || []);
   const last = sheets[sheets.length - 1]; return last ? { sid: main, sheetId: last.id, title: last.title } : null;
 }
 const shortRival = n => up(str(n).replace(/'[^']*'/g, '').replace(/^((?:[A-Z]{1,4}\.)+\s*)+/i, '').replace(/\s+/g, ' ').replace(/`/g, "'").trim()).slice(0, 26);
@@ -1472,7 +1499,7 @@ async function buildTeamExcel(manual = false) {
     for (let i = 0; i < data.length; i += 80) await gfetch(`${me}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: data.slice(i, i + 80) }) });
     // fuera la hoja modelo y la hoja en blanco del Excel nuevo
     const meta = await call('get_spreadsheet', {}, { read: true });
-    const extra = meta.sheets.map(x => x.properties).filter(x => x.sheetId === tplId || !/^\s*\d+\s*-/.test(x.title));
+    const extra = meta.sheets.map(x => x.properties).filter(x => x.sheetId === tplId || (!/^\s*\d+\s*-/.test(x.title) && !['APP', 'FFCV', 'AVISOS'].includes(x.title)));
     if (extra.length) await call('update_spreadsheet', { requests: extra.map(x => ({ deleteSheet: { sheetId: x.sheetId } })) });
     S.settings.build = null; UI.buildMsg = ''; S.current = null; persist();
     showToast(`Excel creado: ${newSheets.length} jornadas y ${players.length} jugadoras de la federación.`);
@@ -1483,8 +1510,7 @@ async function buildTeamExcel(manual = false) {
 // ===== VARIOS EXCEL (un equipo por Google Sheet) =====
 // El equipo activo vive en S; los demás se guardan aparte en S.profiles[id] con sus jornadas, estadísticas y ajustes.
 const PROFILE_KEYS = ['sheets', 'current', 'matches', 'extrasPool', 'stats'];
-const PROFILE_SETTINGS = ['sid', 'sheetTitle', 'captains', 'capMode', 'half', 'legacy', 'ffcv', 'build'];
-const isLegacy = () => S.settings.legacy !== false; // el primer Excel (juvenil): calendario FFCV, avisos, capitanas por defecto
+const PROFILE_SETTINGS = ['sid', 'sheetTitle', 'captains', 'capMode', 'half', 'legacy', 'ffcv', 'build', 'hasAvisos', 'hasFfcvTab', 'hasApp'];
 function profileSnapshot() { const o = { settings: {} }; for (const k of PROFILE_KEYS) o[k] = S[k]; for (const k of PROFILE_SETTINGS) if (S.settings[k] !== undefined) o.settings[k] = S.settings[k]; return o; }
 function teamsList() {
   const l = Object.entries(S.profiles || {}).map(([id, p]) => ({ id, title: (p.settings && p.settings.sheetTitle) || 'Excel' }));
@@ -1522,10 +1548,9 @@ function teamsBlock() {
 }
 
 // ===== CAPITANAS POR TURNO Y ONCE SUGERIDO =====
-const CAPTAINS_DEFAULT = ['INÉS', 'CLAUDIA', 'ÁNGELA'];
 // La lista de capitanas y el sistema son de cada equipo (Excel). El juvenil empieza con Inés-Claudia-Ángela rotatorio.
-const captainsOrder = () => (Array.isArray(S.settings.captains) ? S.settings.captains.filter(Boolean) : (S.settings.legacy !== false ? CAPTAINS_DEFAULT : []));
-const capMode = () => S.settings.capMode || (S.settings.legacy !== false ? 'rot' : 'jer');
+const captainsOrder = () => (Array.isArray(S.settings.captains) ? S.settings.captains.filter(Boolean) : []);
+const capMode = () => S.settings.capMode || 'jer';
 const nkey = x => noacc(up(x)).trim();
 const statSums = () => S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean);
 // La que le toca por turno (si está convocada; si no, la siguiente). Devuelve { id, turnName, skipped }
@@ -1738,7 +1763,7 @@ const ACT = {
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
   doReload() { closeSheet(); openMatch(S.current, { reload: true }); },
   askWipe() { openSheet({ type: 'confirm', title: 'Borrar datos del móvil', text: 'Se borran los partidos de este equipo apuntados en el móvil. Lo que ya está en el Excel no se toca, ni los otros equipos.', ok: 'Borrar', act: 'doWipe' }); },
-  doWipe() { const keep = S.settings, prof = S.profiles; S = defaultState(); S.settings = keep; S.profiles = prof; if (!isLegacy()) S.sheets = []; closeSheet(); persist(); render(); if (ready()) initAuth(); },
+  doWipe() { const keep = S.settings, prof = S.profiles; S = defaultState(); S.settings = keep; S.profiles = prof; S.sheets = []; closeSheet(); persist(); render(); if (ready()) initAuth(); },
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
   askResetLive() { openSheet({ type: 'confirm', title: 'Reiniciar el directo', text: 'El reloj vuelve a 00:00 y se borran los goles, tarjetas y cambios apuntados en este directo. La convocatoria y el once se mantienen.', ok: 'Reiniciar', act: 'doResetLive' }); },
@@ -1755,7 +1780,7 @@ const ACT = {
   editStatsOn() { const m = cur(); (UI.editStats = UI.editStats || {})[m.sheetId] = true; closeSheet(); render(); },
   editStatsOff() { const m = cur(); if (UI.editStats) delete UI.editStats[m.sheetId]; render(); },
   setCapSum(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; m.capManual = true; touch(m); },
-  capModeSet(el) { S.settings.capMode = el.dataset.v; const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); },
+  capModeSet(el) { S.settings.capMode = el.dataset.v; saveAppConfig(); const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); },
   capAuto() { const m = cur(); m.capManual = false; touch(m); },
   suggestOnce() {
     const m = cur(); const F = FORMATIONS[m.formation] || FORMATIONS[DEFAULT_FORMATION];
@@ -1884,7 +1909,7 @@ const ACT = {
   async ffcvSync() {
     if (!ready()) return signIn('');
     UI.ffcvAsked = true; render();
-    try { await setAvisosKeyApp(isLegacy() ? 'ffcv_sync' : 'ffcv_sync:' + ourCod(), new Date().toISOString(), mainSid()); showToast('Pedido. En unos 10 minutos estarán los datos nuevos de la federación; vuelve a abrir la app para verlos.'); }
+    try { await setAvisosKeyApp(S.settings.hasAvisos ? 'ffcv_sync' : 'ffcv_sync:' + ourCod(), new Date().toISOString(), mainSid()); showToast('Pedido. En unos 10 minutos estarán los datos nuevos de la federación; vuelve a abrir la app para verlos.'); }
     catch (e) { UI.ffcvAsked = false; showToast('No se pudo pedir: ' + errText(e)); }
   },
   rpTag(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.tag = p.tag ? '' : 'Goleadora'; p.fed = false; touch(m); },
@@ -2027,7 +2052,7 @@ document.addEventListener('focusin', ev => { if (ev.target.dataset && ev.target.
 document.addEventListener('change', ev => {
   const el = ev.target;
   if (el.classList && el.classList.contains('teamsel')) { ACT.teamPick(el); return; }
-  if (el.dataset && el.dataset.capord) { const o = [...captainsOrder()]; o[+el.dataset.capord] = el.value ? up(el.value) : ''; S.settings.captains = o.filter(Boolean); const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); return; }
+  if (el.dataset && el.dataset.capord) { const o = [...captainsOrder()]; o[+el.dataset.capord] = el.value ? up(el.value) : ''; S.settings.captains = o.filter(Boolean); saveAppConfig(); const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); return; }
   const k = el.dataset && el.dataset.av; if (!k) return;
   if (k === 'martesOn') AV.cfg.martes = el.checked ? (AV.cfg.martes || '10:00') : '';
   else if (k === 'partido') AV.cfg.partido = el.checked ? '1' : '0';
@@ -2056,7 +2081,7 @@ document.addEventListener('input', ev => {
     (m.ov[id] = m.ov[id] || {})[f] = el.value; el.classList.add('ovr'); m.dirty = true; persist();
   }
 });
-document.addEventListener('change', ev => { const el = ev.target; if (el.dataset.bind && (el.dataset.bind === '@settings.half' || el.dataset.bind === '@settings.sid' || el.dataset.bind === '@settings.clientId')) { UI.err.auth = null; render(); if (el.dataset.bind === '@settings.sid' && ready()) { S.ui.tab = 'match'; initAuth(); } } });
+document.addEventListener('change', ev => { const el = ev.target; if (el.dataset.bind === '@settings.half') saveAppConfig(); if (el.dataset.bind && (el.dataset.bind === '@settings.half' || el.dataset.bind === '@settings.sid' || el.dataset.bind === '@settings.clientId')) { UI.err.auth = null; render(); if (el.dataset.bind === '@settings.sid' && ready()) { S.ui.tab = 'match'; initAuth(); } } });
 
 setInterval(() => {
   const m = cur(); if (!m || S.ui.tab !== 'match' || S.ui.step !== 'directo') return;
