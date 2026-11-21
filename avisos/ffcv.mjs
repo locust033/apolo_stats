@@ -15,7 +15,7 @@ async function crest(cod, url) {
   const rel = `escudos/${cod}.${ext}`; const file = `data/${rel}`;
   if (fs.existsSync(file)) return rel;
   const tried = [];
-  for (const host of ['https://ffcv.es', 'https://www.ffcv.es', 'https://resultadosffcv.isquad.es', 'https://www.isquad.es']) {
+  for (const host of ['https://appwebffcv.novanet.es', 'https://ffcv.es']) {
     try {
       const u = /^https?:/.test(url) ? url : host + url;
       const r = await fetch(u, { headers: { ...HEADERS, Accept: 'image/avif,image/webp,image/*,*/*;q=0.8', 'Sec-Fetch-Dest': 'image', 'Sec-Fetch-Mode': 'no-cors' } });
