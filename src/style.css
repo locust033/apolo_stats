@@ -450,8 +450,11 @@ nav.bottom button.on .ic { color: var(--accent); }
 .selteam .link { align-self: flex-start; }
 /* Pantalla de carga: solo el balón girando; al terminar, botecito y fundido */
 #splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
-  background: #22603b; color: #eaf3ec; transition: opacity .35s ease-out; } /* color liso: con degradado los bordes (más oscuros) parecían tardar más en irse */
-#splash.out { opacity: 0; pointer-events: none; }
+  background: #22603b; color: #eaf3ec; transition: background-color .4s ease-out; }
+/* Al salir se cambia el color de fondo (no la transparencia): el iPhone pinta la franja de arriba y la de abajo
+   con el color del fondo, y con un fundido de transparencia se quedaban en verde hasta el final */
+#splash.out { background-color: var(--paper); pointer-events: none; }
+#splash.out .sp-ball, #splash.out .sp-msg { opacity: 0; transition: opacity .25s ease-out; }
 #splash .sp-ball { width: 64px; height: 64px; animation: sp-bounce .9s ease-in-out infinite; will-change: transform; }
 #splash .sp-ball svg { width: 100%; height: 100%; animation: sp-spin .85s linear infinite; filter: drop-shadow(0 8px 8px rgba(0,0,0,.35)); }
 #splash .sp-msg { font-size: 14px; font-weight: 600; letter-spacing: .02em; opacity: .85; min-height: 1.2em; margin: 0; }
