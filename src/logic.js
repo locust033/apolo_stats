@@ -377,10 +377,13 @@ function suggestLineup(ps, slots, candidates, lineup = {}) {
   return res;
 }
 // Capitanas por turno: después de la última que llevó el brazalete, la siguiente convocada de la lista
-function nextCaptain(summaries, curN, order, calledKeys) {
+// mode 'rot' (rotatorio) o 'jer' (jerarquía: la primera convocada de la lista, siempre)
+function nextCaptain(summaries, curN, order, calledKeys, mode = 'rot') {
   const norm = x => noacc(String(x || '').toUpperCase()).trim();
-  const ord = order.map(norm); const called = new Set(calledKeys.map(norm));
+  const ord = order.map(norm).filter(Boolean); const called = new Set(calledKeys.map(norm));
+  if (!ord.length) return null;
   let last = -1;
+  if (mode === 'jer') { for (let i = 0; i < ord.length; i++) if (called.has(ord[i])) return { key: ord[i], turn: ord[0], skipped: i > 0 }; return null; }
   for (const g of summaries.filter(s => s.played && s.n < curN).sort((a, b) => b.n - a.n)) {
     const c = g.players.find(p => p.cap && ord.includes(norm(p.key)));
     if (c) { last = ord.indexOf(norm(c.key)); break; }

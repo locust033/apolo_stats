@@ -847,10 +847,13 @@ function suggestLineup(ps, slots, candidates, lineup = {}) {
   return res;
 }
 // Capitanas por turno: después de la última que llevó el brazalete, la siguiente convocada de la lista
-function nextCaptain(summaries, curN, order, calledKeys) {
+// mode 'rot' (rotatorio) o 'jer' (jerarquía: la primera convocada de la lista, siempre)
+function nextCaptain(summaries, curN, order, calledKeys, mode = 'rot') {
   const norm = x => noacc(String(x || '').toUpperCase()).trim();
-  const ord = order.map(norm); const called = new Set(calledKeys.map(norm));
+  const ord = order.map(norm).filter(Boolean); const called = new Set(calledKeys.map(norm));
+  if (!ord.length) return null;
   let last = -1;
+  if (mode === 'jer') { for (let i = 0; i < ord.length; i++) if (called.has(ord[i])) return { key: ord[i], turn: ord[0], skipped: i > 0 }; return null; }
   for (const g of summaries.filter(s => s.played && s.n < curN).sort((a, b) => b.n - a.n)) {
     const c = g.players.find(p => p.cap && ord.includes(norm(p.key)));
     if (c) { last = ord.indexOf(norm(c.key)); break; }
@@ -1059,12 +1062,13 @@ function parseFfcvRows(rows) {
   }
   return s.clas.length ? s : null;
 }
-function loadFfcvCache() { try { FFCV_SNAP = JSON.parse(localStorage.getItem(FFCV_KEY) || 'null'); } catch (e) {} }
+const ffcvKey = () => (S.settings.legacy === false ? FFCV_KEY + ':' + sid() : FFCV_KEY);
+function loadFfcvCache() { try { FFCV_SNAP = JSON.parse(localStorage.getItem(ffcvKey()) || 'null'); } catch (e) {} }
 async function loadFfcv() {
   try {
     const p = await call('get_values', { range: `'FFCV'!A1:M2000` }, { read: true });
     const snap = parseFfcvRows(p.values);
-    if (snap) { FFCV_SNAP = snap; try { localStorage.setItem(FFCV_KEY, JSON.stringify(snap)); } catch (e) {} }
+    if (snap) { FFCV_SNAP = snap; try { localStorage.setItem(ffcvKey(), JSON.stringify(snap)); } catch (e) {} }
   } catch (e) { /* sin pestaña FFCV: la sección Rival lo indica */ }
 }
 async function importFfcvIfPending() {
@@ -1106,6 +1110,7 @@ async function initAuth() {
   if (jq && sheetById(jq)) { S.current = +jq; S.ui.tab = 'match'; } else pickStartJornada();
   const m = cur();
   // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
+  if (!S.sheets.length) { UI.err.sheets = 'Este Excel no tiene hojas de jornada (con nombres tipo «1 - RIVAL»).'; S.ui.tab = 'settings'; return; }
   await openMatch(S.current ?? S.sheets[0].id, { reload: !(m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) });
   } finally { UI.hold = false; render(); }
   if (resumeAfterLogin === 'save' && cur()) saveToSheet(cur());
@@ -1623,7 +1628,7 @@ const inp = (path, v, attrs = '') => `<input data-bind="${path}" value="${esc(v)
 const nextBtn = (to, label) => `<button class="btn primary wide" data-act="step" data-v="${to}">${label}</button>`;
 
 // Calendario del Apolo: el de la federación (pestaña FFCV, se actualiza solo) o, si no hay, el guardado en la app. Sin jornadas de descanso.
-const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c.length ? c : FFCV; };
+const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c.length ? c : (S.settings.legacy === false ? [] : FFCV); };
 const ffcvFor = m => { const f = ffcvCal()[sheetShort(m.title).n - 1]; return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
 const awayOf = t => { const f = FFCV[sheetShort(t).n - 1]; return !!f && !/apolo/i.test(f[3]); };
 // convierte un marcador del Excel (local - visitante) a "nosotras - rival"
@@ -2062,15 +2067,15 @@ function scoutView(forceCod = null, embedded = false) {
 function settingsView() {
   return `<section class="pad"><div class="card">
     ${S.settings.sid && !UI.editSid
-      ? `<div class="fld"><span>Google Sheet</span><div class="locked"><svg viewBox="0 0 24 24" class="ic"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><b>${esc(S.settings.sheetTitle || 'Excel conectado')}</b><button class="link" data-act="askEditSid">Cambiar</button></div></div>`
-      : field('Google Sheet (pega el enlace)', `<input id="sidInput" value="" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off"><div class="acts"><button class="btn primary" data-act="saveSid">Conectar este Excel</button>${S.settings.sid ? '<button class="btn ghost" data-act="cancelSid">Cancelar</button>' : ''}</div>`)}
+      ? teamsBlock()
+      : field('Google Sheet (pega el enlace)', `<input id="sidInput" value="" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off"><div class="acts"><button class="btn primary" data-act="saveSid">${S.settings.sid ? 'Añadir este equipo' : 'Conectar este Excel'}</button>${S.settings.sid ? '<button class="btn ghost" data-act="cancelSid">Cancelar</button>' : ''}</div>`)}
     ${UI.err.sid ? `<div class="banner err">${esc(UI.err.sid)}</div>` : ''}
     ${field('Duración de cada parte', `<select data-bind="@settings.half">${[35, 40, 45].map(n => `<option value="${n}" ${+S.settings.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
     ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
     <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
     <p class="muted small">Conexión: ${ready() ? `conectada con tu cuenta de Google (la sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; luego se renueva al guardar)` : 'sin sesión'}${UI.err.sheets ? ' · ' + esc(UI.err.sheets) : ''}</p></div>
     ${captainsCard()}
-    ${avisosCard()}
+    ${isLegacy() ? avisosCard() : '<div class="card"><h3 class="h3">Avisos</h3><p class="muted small">Los avisos y los datos de la federación están preparados solo para el equipo juvenil.</p></div>'}
     <div class="card"><h3 class="h3">Cómo se rellena el Excel</h3>
     <ul class="howto"><li><b>TITULAR</b>: en el once inicial. <b>SUPLENTE</b>: convocada que empieza en el banquillo.</li>
     <li><b>MINUTOS</b>: se calculan con los cambios, rojas y el reloj (partes de ${H()}').</li>
@@ -2078,7 +2083,7 @@ function settingsView() {
     <li><b>Cambios volantes</b>: una jugadora que sale puede volver a entrar; los minutos se suman.</li>
     <li><b>GP</b>: goles en propia puerta. <b>CAP</b>: columna nueva que se crea al guardar cada jornada.</li>
     <li>Las jugadoras de otro equipo se añaden en una fila nueva bajo la última jugadora, con el mismo formato.</li></ul></div>
-    <button class="link danger" data-act="askWipe">Borrar todos los datos guardados en este móvil</button></section>`;
+    <button class="link danger" data-act="askWipe">Borrar los datos de este equipo guardados en el móvil</button></section>`;
 }
 
 // ===== AVISOS (notificaciones push) =====
@@ -2153,11 +2158,13 @@ async function setAvisosKeyApp(key, val) {
 }
 
 function captainsCard() {
-  const m = cur(); const names = [...new Set([...(m ? m.roster.map(p => p.name) : []), ...captainsOrder()])];
-  const ord = captainsOrder();
-  return `<div class="card"><h3 class="h3">Capitanas por turno</h3>
-    <p class="muted small">En cada partido lleva el brazalete la siguiente de la lista a la última que lo llevó. Si no está convocada, pasa a la siguiente.</p>
-    ${[0, 1, 2].map(i => field(`${i + 1}ª`, `<select data-capord="${i}">${names.map(n => `<option ${nkey(ord[i] || '') === nkey(n) ? 'selected' : ''}>${esc(title(n))}</option>`).join('')}</select>`)).join('')}</div>`;
+  const m = cur(); const ord = captainsOrder(); const mode = capMode();
+  const names = [...new Set([...(m ? m.roster.map(p => p.name) : []), ...ord])];
+  const n = Math.max(3, ord.length + 1 > 6 ? 6 : ord.length + 1);
+  return `<div class="card"><h3 class="h3">Capitanas</h3>
+    <div class="seg two"><button class="${mode === 'rot' ? 'on' : ''}" data-act="capModeSet" data-v="rot">Rotatorio</button><button class="${mode === 'jer' ? 'on' : ''}" data-act="capModeSet" data-v="jer">Por jerarquía</button></div>
+    <p class="muted small">${mode === 'rot' ? 'En cada partido lleva el brazalete la siguiente de la lista a la última que lo llevó. Si no está convocada, pasa a la siguiente.' : 'La primera de la lista es la capitana siempre que esté convocada. Si no lo está, la siguiente, y así.'}</p>
+    ${Array.from({ length: n }, (_, i) => field(`${i + 1}ª`, `<select data-capord="${i}"><option value="">—</option>${names.map(x => `<option value="${esc(up(x))}" ${nkey(ord[i] || '') === nkey(x) ? 'selected' : ''}>${esc(title(x))}</option>`).join('')}</select>`)).join('')}</div>`;
 }
 // Minutos por posición en la temporada (si jugó en varias en un partido, se reparten a partes iguales)
 function posBars(key) {
@@ -2202,15 +2209,58 @@ function playerGames(p, A) {
   }).join('')}</div>`;
 }
 
+// ===== VARIOS EXCEL (un equipo por Google Sheet) =====
+// El equipo activo vive en S; los demás se guardan aparte en S.profiles[id] con sus jornadas, estadísticas y ajustes.
+const PROFILE_KEYS = ['sheets', 'current', 'matches', 'extrasPool', 'stats'];
+const PROFILE_SETTINGS = ['sid', 'sheetTitle', 'captains', 'capMode', 'half', 'legacy'];
+const isLegacy = () => S.settings.legacy !== false; // el primer Excel (juvenil): calendario FFCV, avisos, capitanas por defecto
+function profileSnapshot() { const o = { settings: {} }; for (const k of PROFILE_KEYS) o[k] = S[k]; for (const k of PROFILE_SETTINGS) if (S.settings[k] !== undefined) o.settings[k] = S.settings[k]; return o; }
+function teamsList() {
+  const l = Object.entries(S.profiles || {}).map(([id, p]) => ({ id, title: (p.settings && p.settings.sheetTitle) || 'Excel' }));
+  if (sid()) l.push({ id: sid(), title: S.settings.sheetTitle || 'Excel conectado', active: true });
+  return l.sort((a, b) => a.title.localeCompare(b.title, 'es'));
+}
+function activateProfile(id, fresh = null, dropCurrent = false) {
+  S.profiles = S.profiles || {};
+  if (sid() && !dropCurrent) S.profiles[sid()] = profileSnapshot();
+  const p = S.profiles[id] || fresh || { settings: { sid: id, legacy: false } };
+  delete S.profiles[id];
+  const d = defaultState();
+  S.sheets = p.sheets || []; S.current = p.current ?? null; S.matches = p.matches || {}; S.extrasPool = p.extrasPool || []; S.stats = p.stats && p.stats.v === 3 ? p.stats : d.stats;
+  for (const k of PROFILE_SETTINGS) delete S.settings[k];
+  Object.assign(S.settings, { half: 45 }, p.settings || {}, { sid: id });
+  Object.values(S.matches).forEach(migrateMatch);
+  UI.sheet = null; UI.pickIn = null; UI.pickMove = null; UI.editSid = false; UI.err = {}; AV.loaded = false; AV.loading = false;
+  FFCV_SNAP = null; loadFfcvCache();
+  S.ui.tab = 'match'; S.ui.scoutCod = null;
+  persist(); render(); initAuth();
+}
+// Antes de cambiar de equipo: si hay jornadas sin guardar, pregunta
+function guardSwitch(fn) {
+  const dirty = Object.values(S.matches).filter(m => m.dirty);
+  if (!dirty.length) return fn();
+  UI.pendingSwitch = fn; openSheet({ type: 'unsaved', list: dirty.map(m => m.title) });
+}
+function teamsBlock() {
+  const l = teamsList();
+  const lock = `<svg viewBox="0 0 24 24" class="ic"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
+  return `<div class="fld"><span>Equipo (Google Sheet)</span>
+    ${l.length > 1 ? `<select class="teamsel">${l.map(t => `<option value="${esc(t.id)}" ${t.active ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</select>`
+      : `<div class="locked">${lock}<b>${esc(S.settings.sheetTitle || 'Excel conectado')}</b></div>`}</div>
+    <div class="acts"><button class="btn" data-act="addTeam">+ Añadir otro equipo</button>${l.length > 1 ? '<button class="btn ghost" data-act="askRemoveTeam">Quitar este equipo</button>' : ''}</div>`;
+}
+
 // ===== CAPITANAS POR TURNO Y ONCE SUGERIDO =====
 const CAPTAINS_DEFAULT = ['INÉS', 'CLAUDIA', 'ÁNGELA'];
-const captainsOrder = () => (S.settings.captains && S.settings.captains.length ? S.settings.captains : CAPTAINS_DEFAULT);
+// La lista de capitanas y el sistema son de cada equipo (Excel). El juvenil empieza con Inés-Claudia-Ángela rotatorio.
+const captainsOrder = () => (Array.isArray(S.settings.captains) ? S.settings.captains.filter(Boolean) : (S.settings.legacy !== false ? CAPTAINS_DEFAULT : []));
+const capMode = () => S.settings.capMode || (S.settings.legacy !== false ? 'rot' : 'jer');
 const nkey = x => noacc(up(x)).trim();
 const statSums = () => S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean);
 // La que le toca por turno (si está convocada; si no, la siguiente). Devuelve { id, turnName, skipped }
 function captainTurn(m) {
   const called = m.roster.filter(p => m.called[p.id]);
-  const r = nextCaptain(statSums(), sheetShort(m.title).n, captainsOrder(), called.map(p => p.name));
+  const r = nextCaptain(statSums(), sheetShort(m.title).n, captainsOrder(), called.map(p => p.name), capMode());
   if (!r) return { id: null, turnName: captainsOrder()[0], skipped: true, none: true };
   const p = called.find(p => nkey(p.name) === r.key);
   const turnP = captainsOrder().find(x => nkey(x) === r.turn) || r.turn;
@@ -2218,7 +2268,7 @@ function captainTurn(m) {
 }
 // Pone sola a la capitana del turno mientras no la elijas tú a mano (solo antes de empezar el partido)
 function autoCaptain(m) {
-  if (!m || m.finalized || m.capManual || (m.clock && m.clock.phase !== 'pre') || !Object.keys(S.stats.sums).length) return false;
+  if (!m || m.finalized || m.capManual || (m.clock && m.clock.phase !== 'pre') || !captainsOrder().length || (capMode() === 'rot' && !Object.keys(S.stats.sums).length)) return false;
   const t = captainTurn(m);
   if (t.id && m.captain !== t.id) { m.captain = t.id; return true; }
   if (!t.id && m.captain && !m.called[m.captain]) { m.captain = null; return true; }
@@ -2227,8 +2277,10 @@ function autoCaptain(m) {
 function captainLine(m) {
   const byId = rmap(m); const t = captainTurn(m); const c = m.captain && byId[m.captain] ? title(byId[m.captain].name) : '';
   if (m.capManual) return `<div class="capline"><i class="cap inl">C</i> <span>${c ? `<b>${esc(c)}</b> · elegida a mano` : 'Sin capitana'}</span> <button class="link small" data-act="capAuto">Volver al turno</button></div>`;
+  if (!captainsOrder().length) return `<div class="capline"><i class="cap inl">C</i> <span>${c ? `<b>${esc(c)}</b>` : '<span class="muted">Sin capitana. Toca a una jugadora del once para elegirla, o pon la lista de capitanas en Ajustes.</span>'}</span></div>`;
   if (!c) return `<div class="capline"><i class="cap inl">C</i> <span class="muted">Ninguna de las capitanas (${captainsOrder().map(x => esc(title(x))).join(', ')}) está convocada.</span></div>`;
-  return `<div class="capline"><i class="cap inl">C</i> <span><b>${esc(c)}</b> · le toca por turno${t.skipped ? ` <span class="muted">(${esc(title(t.turnName))} no está convocada)</span>` : ''}</span></div>`;
+  const why = capMode() === 'jer' ? (t.skipped ? 'capitana por jerarquía' : 'primera capitana') : 'le toca por turno';
+  return `<div class="capline"><i class="cap inl">C</i> <span><b>${esc(c)}</b> · ${why}${t.skipped ? ` <span class="muted">(${esc(title(t.turnName))} no está convocada)</span>` : ''}</span></div>`;
 }
 // Estadística de posiciones de la temporada y sugerencias para cada hueco
 const posStats = () => positionStats(statSums());
@@ -2377,6 +2429,13 @@ function renderSheet() {
     }
     case 'adjust': { h = 'Ajustar el reloj'; body = `<p class="muted small">Si se te olvidó darle al empezar, pon el minuto por el que va el partido.</p>${minuteField(s)}<button class="btn primary wide" data-act="adjSave">Ajustar</button>`; break; }
     case 'form': { h = 'Cambiar de sistema'; body = formationChips(m) + '<p class="muted small">Las jugadoras mantienen su número de posición.</p>'; break; }
+    case 'unsaved': {
+      h = 'Hay cambios sin guardar';
+      body = `<p>Tienes cambios sin guardar en el Excel en ${s.list.map(t => `<b>${esc(t)}</b>`).join(', ')}.</p>
+        <div class="acts col"><button class="btn primary" data-act="unsavedSave">Guardar y continuar</button><button class="btn" data-act="unsavedSkip">Cambiar sin guardar</button><button class="btn ghost" data-act="unsavedBack">Volver atrás</button></div>
+        <p class="muted small">Si cambias sin guardar, los cambios se quedan apuntados en el móvil para cuando vuelvas a este equipo.</p>`;
+      break;
+    }
     case 'confirm': { h = s.title; body = `<p>${s.text}</p><div class="acts"><button class="btn danger" data-act="${s.act}">${s.ok}</button><button class="btn" data-act="close">Cancelar</button></div>`; break; }
     case 'pdetail': {
       const A = aggregate(S.sheets.map(x => S.stats.sums[x.id]).filter(Boolean)); const p = A.players.find(x => x.key === s.key); if (!p) { closeSheet(); return; }
@@ -2407,8 +2466,8 @@ const ACT = {
   reloadJ() { openMatch(S.current, { reload: true }); },
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
   doReload() { closeSheet(); openMatch(S.current, { reload: true }); },
-  askWipe() { openSheet({ type: 'confirm', title: 'Borrar datos del móvil', text: 'Se borran los partidos apuntados en este móvil. Lo que ya está en el Excel no se toca.', ok: 'Borrar', act: 'doWipe' }); },
-  doWipe() { const keep = S.settings; S = defaultState(); S.settings = keep; closeSheet(); persist(); render(); if (ready()) openMatch(S.sheets[0].id); },
+  askWipe() { openSheet({ type: 'confirm', title: 'Borrar datos del móvil', text: 'Se borran los partidos de este equipo apuntados en el móvil. Lo que ya está en el Excel no se toca, ni los otros equipos.', ok: 'Borrar', act: 'doWipe' }); },
+  doWipe() { const keep = S.settings, prof = S.profiles; S = defaultState(); S.settings = keep; S.profiles = prof; if (!isLegacy()) S.sheets = []; closeSheet(); persist(); render(); if (ready()) initAuth(); },
   save() { const m = cur(); if (m) saveToSheet(m); },
   signin() { signIn(''); },
   askResetLive() { openSheet({ type: 'confirm', title: 'Reiniciar el directo', text: 'El reloj vuelve a 00:00 y se borran los goles, tarjetas y cambios apuntados en este directo. La convocatoria y el once se mantienen.', ok: 'Reiniciar', act: 'doResetLive' }); },
@@ -2425,6 +2484,7 @@ const ACT = {
   editStatsOn() { const m = cur(); (UI.editStats = UI.editStats || {})[m.sheetId] = true; closeSheet(); render(); },
   editStatsOff() { const m = cur(); if (UI.editStats) delete UI.editStats[m.sheetId]; render(); },
   setCapSum(el) { const m = cur(); m.captain = m.captain === el.dataset.id ? null : el.dataset.id; m.capManual = true; touch(m); },
+  capModeSet(el) { S.settings.capMode = el.dataset.v; const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); },
   capAuto() { const m = cur(); m.capManual = false; touch(m); },
   suggestOnce() {
     const m = cur(); const F = FORMATIONS[m.formation] || FORMATIONS[DEFAULT_FORMATION];
@@ -2452,16 +2512,33 @@ const ACT = {
   cancelSid() { UI.editSid = false; UI.err.sid = null; render(); },
   async saveSid() {
     const v = str($('#sidInput').value); if (!v) return;
-    const prev = S.settings.sid; S.settings.sid = v;
-    if (!sid()) { S.settings.sid = prev; UI.err.sid = 'Eso no parece un enlace de Google Sheets.'; return render(); }
-    if (!ready()) { persist(); UI.editSid = false; return signIn(''); }
-    try {
-      await call('get_spreadsheet', {}, { read: true });
-      UI.editSid = false; UI.err.sid = null; UI.err.auth = null; S.stats = { v: 3, at: 0, sums: {} };
-      if (prev !== S.settings.sid) S.matches = {};
-      persist(); S.ui.tab = 'match'; initAuth();
-    } catch (e) { S.settings.sid = prev; UI.err.sid = 'No he podido abrir ese Excel: ' + errText(e); render(); }
+    const prev = S.settings.sid, prevId = sid(); S.settings.sid = v; const newId = sid();
+    if (!newId || newId === v && !/^[a-zA-Z0-9_-]{20,}$/.test(v)) { S.settings.sid = prev; UI.err.sid = 'Eso no parece un enlace de Google Sheets.'; return render(); }
+    if (!prev) { // primer Excel
+      if (!ready()) { persist(); UI.editSid = false; return signIn(''); }
+      try { await call('get_spreadsheet', {}, { read: true }); UI.editSid = false; UI.err.sid = null; UI.err.auth = null; persist(); S.ui.tab = 'match'; initAuth(); }
+      catch (e) { S.settings.sid = prev; UI.err.sid = 'No he podido abrir ese Excel: ' + errText(e); render(); }
+      return;
+    }
+    if (newId === prevId || (S.profiles || {})[newId]) { S.settings.sid = prev; UI.editSid = false; UI.err.sid = null; if (newId !== prevId) guardSwitch(() => activateProfile(newId)); else render(); return; }
+    if (!ready()) { S.settings.sid = prev; return signIn(''); }
+    let title0 = '';
+    try { const p = await call('get_spreadsheet', {}, { read: true }); title0 = (p && p.properties && p.properties.title) || ''; }
+    catch (e) { S.settings.sid = prev; UI.err.sid = 'No he podido abrir ese Excel: ' + errText(e); return render(); }
+    S.settings.sid = prev; UI.editSid = false; UI.err.sid = null;
+    guardSwitch(() => activateProfile(newId, { settings: { sid: newId, sheetTitle: title0, legacy: false } }));
   },
+  teamPick(el) { const id = el.value; if (!id || id === sid()) return; guardSwitch(() => activateProfile(id)); },
+  addTeam() { UI.editSid = true; UI.err.sid = null; render(); },
+  askRemoveTeam() { openSheet({ type: 'confirm', title: 'Quitar este equipo de la app', text: `Se quita «${esc(S.settings.sheetTitle || 'este Excel')}» de la app y lo que tengas apuntado sin guardar en el móvil. El Google Sheet no se toca: puedes volver a añadirlo cuando quieras.`, ok: 'Quitar', act: 'doRemoveTeam' }); },
+  doRemoveTeam() { closeSheet(); const other = Object.keys(S.profiles || {})[0]; if (!other) return; const gone = sid(); activateProfile(other, null, true); delete S.profiles[gone]; persist(); render(); },
+  async unsavedSave() {
+    const fn = UI.pendingSwitch; closeSheet();
+    for (const m of Object.values(S.matches).filter(x => x.dirty)) { await saveToSheet(m); if (m.dirty) { showToast('No se pudo guardar ' + m.title + '. No he cambiado de equipo.'); return; } }
+    UI.pendingSwitch = null; if (fn) fn();
+  },
+  unsavedSkip() { const fn = UI.pendingSwitch; UI.pendingSwitch = null; closeSheet(); if (fn) fn(); },
+  unsavedBack() { UI.pendingSwitch = null; closeSheet(); render(); },
   signout() { signOut(); },
   reconnect() { refreshSheets(); },
   statsReload() { loadStats(true); },
@@ -2672,7 +2749,8 @@ document.addEventListener('click', ev => {
 document.addEventListener('focusin', ev => { if (ev.target.dataset && ev.target.dataset.locked) { ev.target.blur(); ACT.unlock(); } });
 document.addEventListener('change', ev => {
   const el = ev.target;
-  if (el.dataset && el.dataset.capord) { const o = [...captainsOrder()]; o[+el.dataset.capord] = up(el.value); S.settings.captains = o; const m = cur(); if (m) { autoCaptain(m); } persist(); render(); return; }
+  if (el.classList && el.classList.contains('teamsel')) { ACT.teamPick(el); return; }
+  if (el.dataset && el.dataset.capord) { const o = [...captainsOrder()]; o[+el.dataset.capord] = el.value ? up(el.value) : ''; S.settings.captains = o.filter(Boolean); const m = cur(); if (m && autoCaptain(m)) m.dirty = true; persist(); render(); return; }
   const k = el.dataset && el.dataset.av; if (!k) return;
   if (k === 'martesOn') AV.cfg.martes = el.checked ? (AV.cfg.martes || '10:00') : '';
   else if (k === 'partido') AV.cfg.partido = el.checked ? '1' : '0';
@@ -2715,9 +2793,9 @@ function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}
   if (S.stats.v !== 3) S.stats = { v: 3, at: 0, sums: {} }; // v3: sin Ainhoa y minutos por jornada
   Object.values(S.matches).forEach(migrateMatch);
-  if (S.current == null) S.current = S.sheets[0].id;
+  if (S.current == null && S.sheets[0]) S.current = S.sheets[0].id;
   pickStartJornada(); S.ui.railOpen = false;
-  if (!S.matches[S.current]) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
+  if (S.current != null && !S.matches[S.current] && (sheetById(S.current) || S.sheets[0])) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
   render();
   const chip = document.getElementById('j' + S.current); if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest' });
   initAuth();
