@@ -158,7 +158,8 @@ function parseFfcvRows(rows) {
     else if (k === 'M') s.matches.push([+v[0], str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), str(v[6])]);
     else if (k === 'K') s.cal.push([+v[0], str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), str(v[6])]);
     else if (k === 'S') s.sanc.push([str(v[0]), str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), +v[6] || 0]);
-    else if (k === 'T') s.teams.push({ cod: str(v[0]), name: str(v[1]), es: str(v[2]).split(',').filter(Boolean), pl: [] });
+    else if (k === 'T') s.teams.push({ cod: str(v[0]), name: str(v[1]), es: str(v[2]).split(',').filter(Boolean), pl: [], staff: [] });
+    else if (k === 'E') { const t = s.teams.find(x => x.cod === str(v[0])); if (t) t.staff.push(str(v[1])); }
     else if (k === 'P') { const t = s.teams.find(x => x.cod === str(v[0])); if (t) t.pl.push([str(v[1]), str(v[2]), str(v[3]), ...v.slice(4, 12).map(x => +x || 0)]); }
   }
   return s.clas.length ? s : null;
@@ -504,6 +505,20 @@ async function wipeJornada(m) {
   UI.sync = 'saving'; UI.syncMsg = 'Borrando la jornada…'; render();
   try {
     const t = m.title; const L = parseLayout(await readRows(t));
+    const writes = blankWrites(t, L);
+    await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
+    await call('update_formulas', { spreadsheetId: sid(), range: `${qs(t)}!D11`, formulas: [[CIT_FORMULA]] });
+    try { await call('update_spreadsheet', { requests: [...labelCells(m.sheetId, L, {}), ...resultColorReqs(m.sheetId, null)] }); } catch (e) {}
+    delete S.stats.sums[m.sheetId]; delete S.matches[m.sheetId];
+    if (UI.editStats) delete UI.editStats[m.sheetId];
+    UI.sync = 'ok'; UI.syncMsg = 'Jornada borrada';
+    S.ui.step = 'previa'; persist();
+    await openMatch(m.sheetId, { reload: true });
+    showToast(`Jornada ${sheetShort(t).n} borrada del Excel`);
+  } catch (e) { UI.sync = 'error'; UI.syncMsg = 'No se pudo borrar del todo: ' + errText(e) + ' Vuelve a intentarlo.'; render(); }
+}
+// Lo que se vacía de una hoja de jornada (se quedan nombres, dorsales y formato)
+function blankWrites(t, L) {
     const blank = (n, w) => Array.from({ length: n }, () => Array(w).fill(''));
     const writes = [
       [`${qs(t)}!D8:D10`, blank(3, 1)],
@@ -517,16 +532,7 @@ async function wipeJornada(m) {
     if (L.obs >= 0) writes.push([`${qs(t)}!A${L.obs + 2}`, [['']]]);
     const vr = valRow(L, () => ''); if (vr) writes.push([`${qs(t)}!${vr[0]}`, vr[1]]);
     if (L.gh >= 0) { writes.push([`${qs(t)}!A${L.gh + 2}:C${L.gh + 12}`, blank(11, 3)]); writes.push([`${qs(t)}!E${L.gh + 2}:H${L.gh + 12}`, blank(11, 4).map(r => [r[0], null, r[2], r[3]])]); }
-    await Promise.all(writes.map(([r, v]) => writeVals(r, v)));
-    await call('update_formulas', { spreadsheetId: sid(), range: `${qs(t)}!D11`, formulas: [[CIT_FORMULA]] });
-    try { await call('update_spreadsheet', { requests: [...labelCells(m.sheetId, L, {}), ...resultColorReqs(m.sheetId, null)] }); } catch (e) {}
-    delete S.stats.sums[m.sheetId]; delete S.matches[m.sheetId];
-    if (UI.editStats) delete UI.editStats[m.sheetId];
-    UI.sync = 'ok'; UI.syncMsg = 'Jornada borrada';
-    S.ui.step = 'previa'; persist();
-    await openMatch(m.sheetId, { reload: true });
-    showToast(`Jornada ${sheetShort(t).n} borrada del Excel`);
-  } catch (e) { UI.sync = 'error'; UI.syncMsg = 'No se pudo borrar del todo: ' + errText(e) + ' Vuelve a intentarlo.'; render(); }
+    return writes;
 }
 
 // ===== ESTADÍSTICAS =====
@@ -1402,15 +1408,17 @@ async function addTeamGo() {
       if (!r.ok) throw { message: 'Google no ha dejado crear el Excel (' + r.status + ').' };
       newId = (await r.json()).spreadsheetId;
     }
-    const tpl = templateRef();
+    const tpl = await templateRef();
     const done = () => { UI.addT = null; };
     guardSwitch(() => { done(); activateProfile(newId, { settings: { sid: newId, sheetTitle: title0, legacy: false, ffcv: cfg, half: a.half, capMode: a.capMode, captains: [], build: a.mode === 'new' ? tpl : null } }); });
     a.busy = false;
   } catch (e) { a.busy = false; a.err = true; a.msg = e.message || errText(e); render(); }
 }
-// Hoja modelo para los Excel nuevos: la última jornada del Excel principal (sin datos)
-function templateRef() {
+// Hoja modelo para los Excel nuevos: la pestaña oculta «PLANTILLA» del Excel principal (vacía).
+// Si no estuviera, la última jornada, que se vacía igualmente al copiarla.
+async function templateRef() {
   const main = mainSid(); if (!main) return null;
+  try { const meta = await call('get_spreadsheet', { sid: main }, { read: true }); const p = meta.sheets.map(x => x.properties).find(x => x.title === 'PLANTILLA'); if (p) return { sid: main, sheetId: p.sheetId, title: p.title }; } catch (e) {}
   const sheets = isLegacy() ? S.sheets : ((S.profiles[main] || {}).sheets || []);
   const last = sheets[sheets.length - 1]; return last ? { sid: main, sheetId: last.id, title: last.title } : null;
 }
@@ -1438,7 +1446,12 @@ async function buildTeamExcel(manual = false) {
     if (need < have) req.push({ deleteDimension: { range: { sheetId: tplId, dimension: 'ROWS', startIndex: L.hdr + 1 + need, endIndex: L.total } } });
     if (req.length) await call('update_spreadsheet', { requests: req });
     rows = (await call('get_values', { range: `${qs(tplTitle)}!A1:M140` }, { read: true })).values || []; L = parseLayout(rows);
-    // plantilla vacía con las jugadoras de la federación
+    // todo en blanco (por si la hoja modelo tuviera datos) y las jugadoras de la federación
+    await Promise.all(blankWrites(tplTitle, L).map(([r, v]) => writeVals(r, v)));
+    await call('update_formulas', { range: `${qs(tplTitle)}!D11`, formulas: [[CIT_FORMULA]] });
+    try { await call('update_spreadsheet', { requests: [...labelCells(tplId, L, {}), ...resultColorReqs(tplId, null)] }); } catch (e) {}
+    const staff = ((team && team.staff) || []).slice(0, 2).map(n => up(nameFmt(n)));
+    await call('update_values', { range: `${qs(tplTitle)}!A10:A11`, values: [[staff[0] || ''], [staff[1] || '']] });
     const block = Array.from({ length: L.total - (L.hdr + 1) }, (_, i) => { const p = players[i]; return [p ? p.name : '', p ? (+p.d || p.d) : '', false, false, '', '', '', '', false, '', '', '', false]; });
     await call('update_values', { range: `${qs(tplTitle)}!A${L.hdr + 2}:M${L.total}`, values: block });
     // nombre del rival en el bloque de sistemas y sistema propio vacío

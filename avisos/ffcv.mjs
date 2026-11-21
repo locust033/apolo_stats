@@ -33,12 +33,17 @@ async function build({ t: T, c: C, g: G, team: APOLO }) {
   // fichas de los partidos jugados: jugadoras, goles, tarjetas y sistema
   const fichas = await pool(done.sort((a, b) => a.j - b.j), 4, async p => ({ p, f: await get(`api/partidos/ficha_partido_ajax.php?cod_partido=${p.codacta}`) }));
   const teams = new Map(); // cod -> {name, es:[], pl: Map}
-  const team = (cod, name) => { cod = String(cod); if (!teams.has(cod)) teams.set(cod, { name, es: [], pl: new Map() }); return teams.get(cod); };
+  const team = (cod, name) => { cod = String(cod); if (!teams.has(cod)) teams.set(cod, { name, es: [], pl: new Map(), staff: [] }); return teams.get(cod); };
   for (const { p, f } of fichas) {
     for (const side of ['local', 'visitante']) {
       const cod = String(side === 'local' ? (f.codigo_equipo_local || p.cod_equipo_local) : (f.codigo_equipo_visitante || p.cod_equipo_visitante));
       const t = team(cod, side === 'local' ? p.local : p.visitante);
       const es = side === 'local' ? f.esquema_local : f.esquema_visitante; if (es) t.es.push(es);
+      // cuerpo técnico (en el orden del acta: entrenador/a, 2º entrenador/a, otros)
+      t.staff = t.staff || [];
+      const sfx = side === 'local' ? ['entrenador_local', 'entrenador2_local', 'otros_tecnicos_local'] : ['entrenador_visitante', 'entrenador2_visitante', 'otros_tecnicos_visitante'];
+      for (const k of sfx) { const v = f[k]; const list = Array.isArray(v) ? v.map(x => x && (x.nombre || x.nombre_tecnico || x.nombre_visible || '')) : [v];
+        for (const n of list) { const nm = String(n || '').trim(); if (nm && !t.staff.includes(nm)) t.staff.push(nm); } }
       for (const j of f[`jugadores_equipo_${side}`] || []) {
         const k = String(j.codjugador); const x = t.pl.get(k) || { name: j.nombre_jugador, d: '', pos: '', pj: 0, ti: 0, g: 0, pen: 0, og: 0, y: 0, r: 0, c: 0 };
         x.name = j.nombre_jugador || x.name; x.d = String(j.dorsal || x.d); x.pos = j.posicion_jugador_abreviatura || x.pos;
@@ -57,6 +62,7 @@ async function build({ t: T, c: C, g: G, team: APOLO }) {
   for (const c of clas.clasificacion || []) team(c.codequipo, c.nombre).name = c.nombre;
   for (const [cod, t] of teams) {
     rows.push(['T', cod, t.name, t.es.join(',')]);
+    for (const n of t.staff || []) rows.push(['E', cod, n]);
     for (const x of t.pl.values()) rows.push(['P', cod, x.name, x.d, x.pos, x.pj, x.ti, x.g, x.pen, x.og, x.y, x.r, x.c]);
   }
   // sanciones del comité
