@@ -791,10 +791,11 @@ function calView() {
   const list = inMonth.map(x => x.rest
     ? `<div class="cgame rest"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}</span><span class="crest none"><b>—</b></span><span class="cname">Descanso</span></div>`
     : `<button data-act="calDay" data-n="${x.n}" class="cgame ${rc(x)}"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}${x.hora ? `<br><small>${esc(x.hora)}</small>` : ''}</span>${crestHtml(x.rival)}<span class="cname">${esc(title(x.rival))}<small><i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>${x.home ? 'En casa' : 'Fuera'}</small></span>${x.final ? `<b class="cres">${x.final.join('-')}</b>` : ''}</button>`).join('');
-  return `<section class="pad"><div class="calsync"><span class="muted small">Federación: ${ffcvAge()}</span><button class="btn small" data-act="calRefresh" ${UI.calBusy ? 'disabled' : ''}>${UI.calBusy ? ballSpin() + ' Actualizando…' : '↻ Actualizar'}</button></div><div class="card calcard">
+  return `<section class="pad"><div class="card calcard">
     <div class="calhead"><button class="btn icon" data-act="calMove" data-v="-1" ${curM <= minM ? 'disabled' : ''} aria-label="Mes anterior">‹</button><h3 class="h3">${MESES[mo - 1]} <span class="muted">${y}</span></h3><button class="btn icon" data-act="calMove" data-v="1" ${curM >= maxM ? 'disabled' : ''} aria-label="Mes siguiente">›</button></div>
     <div class="cweek">${wd}</div><div class="cgrid">${cells.join('')}</div>
-    <p class="calkey muted small"><i class="ha h">${IC.home}</i>En casa <i class="ha a">${IC.plane}</i>Fuera</p></div>
+    <div class="calfoot"><p class="calkey muted small"><i class="ha h">${IC.home}</i>En casa <i class="ha a">${IC.plane}</i>Fuera</p><button class="btn small" data-act="calRefresh" ${UI.calBusy ? 'disabled' : ''}>${UI.calBusy ? ballSpin() + ' Actualizando…' : '↻ Actualizar'}</button></div>
+    <p class="muted small calage">Federación: ${ffcvAge()}</p></div>
     <div class="card"><div class="eyebrow">Partidos de ${MESES[mo - 1]}</div>${list || '<p class="muted small">Este mes no hay jornadas.</p>'}</div></section>`;
 }
 function navbar() {

@@ -520,8 +520,11 @@ nav.bottom button.on .ic { color: var(--accent); }
 .cgame.rest { color: var(--muted); } .cgame.rest .cname { font-style: italic; font-weight: 600; }
 .crest.none b { font-size: 14px; }
 
-.calsync { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.calsync .btn.small { padding: 7px 12px; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+
+.calfoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.calfoot .calkey { margin: 0; }
+.calage { margin: 6px 0 0; }
+.calfoot .btn.small { padding: 7px 12px; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
 .cdhead { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; margin-bottom: 14px; }
 .cdhead b { display: block; font-size: 18px; font-weight: 800; }
 .cdha { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--muted); margin-top: 3px; }
@@ -533,4 +536,4 @@ nav.bottom button.on .ic { color: var(--accent); }
 .cdinfo dt { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 2px; }
 .cdinfo dd { margin: 0; font-weight: 600; }
 .cdinfo dd::first-letter { text-transform: uppercase; }
-.calsync .btn.small { white-space: nowrap; flex: none; }
+.calfoot .btn.small { white-space: nowrap; flex: none; }
