@@ -605,6 +605,7 @@ nav.bottom button.on .ic { color: var(--accent); }
 
 .top .homebtn ~ .matchup { font-size: 20px; gap: 6px; }
 .top .homebtn ~ .sync { max-width: 34vw; }
+.settabs { margin-bottom: 14px; }
 
 </style>
 </head>
@@ -1339,7 +1340,7 @@ async function initAuth() {
   const m = cur();
   // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
   if (S.settings.build) { await loadFfcv(); UI.hold = false; buildTeamExcel(); if (!UI.buildTimer) UI.buildTimer = setInterval(() => { if (S.settings.build && !UI.building) buildTeamExcel(); else if (!S.settings.build) { clearInterval(UI.buildTimer); UI.buildTimer = null; } }, 60000); return; }
-  if (!S.sheets.length) { UI.err.sheets = 'Este Excel no tiene hojas de jornada (con nombres tipo «1 - RIVAL»).'; S.ui.tab = 'settings'; return; }
+  if (!S.sheets.length) { UI.err.sheets = 'Este Excel no tiene hojas de jornada (con nombres tipo «1 - RIVAL»).'; S.ui.tab = 'settings'; S.ui.setTab = 'team'; return; }
   await openMatch(S.current ?? S.sheets[0].id, { reload: !(m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) });
   } finally { UI.hold = false; render(); }
   if (resumeAfterLogin === 'save' && cur()) saveToSheet(cur());
@@ -1950,7 +1951,7 @@ function pickStartJornada() {
   return false;
 }
 function matchView(m) {
-  if (!sid() || (!S.sheets.length && !S.settings.build)) return `<section class="pad"><div class="card"><h3 class="h3">Sin equipo conectado</h3><p>${ready() ? 'Conecta el Google Sheet de tu equipo en Ajustes, o añade uno buscándolo en la federación.' : 'Entra con tu cuenta de Google y conecta el Excel de tu equipo en Ajustes.'}</p><button class="btn primary" data-act="tab" data-v="settings">Ir a Ajustes</button></div></section>`;
+  if (!sid() || (!S.sheets.length && !S.settings.build)) return `<section class="pad"><div class="card"><h3 class="h3">Sin equipo conectado</h3><p>${ready() ? 'Conecta el Google Sheet de tu equipo en Ajustes, o añade uno buscándolo en la federación.' : 'Entra con tu cuenta de Google y conecta el Excel de tu equipo en Ajustes.'}</p><button class="btn primary" data-act="tab" data-v="settings" data-st="team">Ir a Ajustes</button></div></section>`;
   if (S.settings.build) return `<section class="pad"><div class="card"><h3 class="h3">Preparando el Excel de ${esc((ffcvCfg() || {}).name || 'este equipo')}</h3><p>${UI.building ? ballSpin() + ' ' : ''}${esc(UI.buildMsg || 'Un momento…')}</p>${UI.building ? '' : '<button class="btn" data-act="buildCheck">Comprobar ahora</button>'}</div></section>`;
   if (!m) return `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
   if (m.finalized) {
@@ -2422,18 +2423,29 @@ function scoutView(forceCod = null, embedded = false) {
 
 function settingsView() {
   if (UI.addT) return `<section class="pad">${addTeamView()}</section>`;
-  return `<section class="pad"><div class="card">
+  // sin Excel conectado, lo primero es conectarlo: se abre en «Equipo»
+  const st = !S.settings.sid ? 'team' : (S.ui.setTab || 'app');
+  const seg = `<div class="seg wide settabs">${[['app', 'App'], ['team', 'Equipo']].map(([v, l]) => `<button class="${st === v ? 'on' : ''}" data-act="setTab" data-v="${v}">${l}</button>`).join('')}</div>`;
+  if (st === 'app') return `<section class="pad">${seg}
+    <div class="card"><h3 class="h3">General</h3>
+    ${field('Al abrir la app', `<div class="seg wide">${[['home', 'Inicio (jornadas)'], ['next', 'Próxima jornada']].map(([v, l]) => `<button class="${(S.settings.startView || 'home') === v ? 'on' : ''}" data-act="startView" data-v="${v}">${l}</button>`).join('')}</div>`)}
+    </div>
+    <div class="card"><h3 class="h3">Cuenta de Google</h3>
+    ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
+    <p class="muted small">${ready() ? `Conectada con tu cuenta de Google. La sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} y luego se renueva sola.` : 'Sin sesión.'}</p>
+    <div class="acts">${ready() ? '<button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div></div>
+    ${S.settings.hasAvisos ? avisosCard() : '<div class="card"><h3 class="h3">Avisos</h3><p class="muted small">Los avisos al móvil van con el Excel principal (el que tiene la pestaña AVISOS). Este equipo no la tiene.</p></div>'}</section>`;
+  return `<section class="pad">${S.settings.sid ? seg : ''}<div class="card">
     ${S.settings.sid && !UI.editSid
       ? teamsBlock()
       : field('Google Sheet (pega el enlace)', `<input id="sidInput" value="" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off"><div class="acts"><button class="btn primary" data-act="saveSid">${S.settings.sid ? 'Añadir este equipo' : 'Conectar este Excel'}</button>${S.settings.sid ? '<button class="btn ghost" data-act="cancelSid">Cancelar</button>' : ''}</div>`)}
     ${UI.err.sid ? `<div class="banner err">${esc(UI.err.sid)}</div>` : ''}
-    ${field('Al abrir la app', `<div class="seg wide">${[['home', 'Inicio (jornadas)'], ['next', 'Próxima jornada']].map(([v, l]) => `<button class="${(S.settings.startView || 'home') === v ? 'on' : ''}" data-act="startView" data-v="${v}">${l}</button>`).join('')}</div>`)}
+    <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
+    ${UI.err.sheets ? `<p class="muted small">${esc(UI.err.sheets)}</p>` : ''}</div>
+    <div class="card"><h3 class="h3">Partido</h3>
     ${field('Duración de cada parte', `<select data-bind="@settings.half">${[25, 30, 35, 40, 45].map(n => `<option value="${n}" ${+S.settings.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
-    ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
-    <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
-    <p class="muted small">Conexión: ${ready() ? `conectada con tu cuenta de Google (la sesión dura hasta las ${new Date(AUTH.exp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; luego se renueva al guardar)` : 'sin sesión'}${UI.err.sheets ? ' · ' + esc(UI.err.sheets) : ''}</p></div>
+    </div>
     ${captainsCard()}
-    ${S.settings.hasAvisos ? avisosCard() : '<div class="card"><h3 class="h3">Avisos</h3><p class="muted small">Los avisos al móvil van con el Excel principal (el que tiene la pestaña AVISOS). Este equipo no la tiene.</p></div>'}
     <div class="card"><h3 class="h3">Cómo se rellena el Excel</h3>
     <ul class="howto"><li><b>TITULAR</b>: en el once inicial. <b>SUPLENTE</b>: convocada que empieza en el banquillo.</li>
     <li><b>MINUTOS</b>: se calculan con los cambios, rojas y el reloj (partes de ${H()}').</li>
@@ -2992,6 +3004,7 @@ const ACT = {
     const m = cur(); if (!m || !m.dirty) return go();
     UI.pendingSwitch = go; UI.pendingCtx = 'home'; openSheet({ type: 'unsaved', list: [m.title], ctx: 'home' });
   },
+  setTab(el) { S.ui.setTab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); },
   startView(el) { S.settings.startView = el.dataset.v; persist(); render(); },
   calPickMonth() { openSheet({ type: 'calmonth' }); },
   calSetMonth(el) { S.ui.calMonth = el.dataset.v; UI.sheet = null; persist(); renderSheet(); render(); },
@@ -3008,7 +3021,7 @@ const ACT = {
     UI.calBusy = false; render();
   },
   calMove(el) { const [y, mo] = (S.ui.calMonth || calStartMonth()).split('-').map(Number); const d = new Date(y, mo - 1 + (+el.dataset.v), 1); S.ui.calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; persist(); render(); },
-  tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
+  tab(el) { if (el.dataset.st) S.ui.setTab = el.dataset.st; S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
   stepGo(el) { const i = STEPS.findIndex(([k]) => k === S.ui.step) + +el.dataset.v; if (i < 0 || i >= STEPS.length) return; S.ui.step = STEPS[i][0]; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
   stepsToggle() { S.ui.stepsOpen = !S.ui.stepsOpen; persist(); render(); },

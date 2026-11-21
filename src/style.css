@@ -585,3 +585,4 @@ nav.bottom button.on .ic { color: var(--accent); }
 
 .top .homebtn ~ .matchup { font-size: 20px; gap: 6px; }
 .top .homebtn ~ .sync { max-width: 34vw; }
+.settabs { margin-bottom: 14px; }
