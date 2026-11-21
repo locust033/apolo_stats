@@ -468,10 +468,28 @@ nav.bottom button.on .ic { color: var(--accent); }
 .selteam { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--good) 10%, transparent); margin-bottom: 12px; }
 .selteam small { color: var(--muted); }
 .selteam .link { align-self: flex-start; }
+/* Pantalla de carga: balón girando, disparo a la escuadra del logo y fundido */
+#splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(120% 80% at 50% 35%, #2f7a4a 0%, #1d5233 55%, #133a24 100%); color: #eaf3ec; transition: opacity .45s ease; }
+#splash.out { opacity: 0; pointer-events: none; }
+#splash .sp-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 34px; }
+#splash .sp-logo { position: relative; width: 132px; height: 132px; border-radius: 30px; box-shadow: 0 14px 34px rgba(0,0,0,.35); }
+#splash .sp-logo img { width: 100%; height: 100%; border-radius: 30px; display: block; }
+#splash .sp-target { position: absolute; right: 10px; top: 10px; width: 1px; height: 1px; }
+#splash .sp-logo.hit { animation: sp-net .45s ease-out; }
+#splash .sp-ball { width: 54px; height: 54px; animation: sp-bounce .9s ease-in-out infinite; will-change: transform; }
+#splash .sp-ball svg { width: 100%; height: 100%; animation: sp-spin .85s linear infinite; filter: drop-shadow(0 6px 6px rgba(0,0,0,.35)); }
+#splash .sp-ball.shot { animation: none; }
+#splash .sp-msg { font-size: 14px; font-weight: 600; letter-spacing: .02em; opacity: .85; min-height: 1.2em; margin: 0; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
+@keyframes sp-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+@keyframes sp-net { 0% { transform: scale(1); } 35% { transform: scale(1.07) rotate(-2deg); } 70% { transform: scale(.98); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { #splash .sp-ball, #splash .sp-ball svg { animation: none; } }
 
 </style>
 </head>
 <body>
+<div id="splash"><div class="sp-stage"><div class="sp-logo"><img src="icons/icon-512.png?v=2" alt=""><span class="sp-target"></span></div><div class="sp-ball"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="bg" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#eef1ea"/><stop offset="1" stop-color="#b9c2bb"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#bg)" stroke="#142019" stroke-width="3"/><path d="M50 30 l17 12 -6.5 20 h-21 L33 42z" fill="#142019"/><path d="M50 30V12M67 42l17-6M60.5 62l10 15M39.5 62l-10 15M33 42l-17-6" stroke="#142019" stroke-width="3" fill="none"/><path d="M41 6l9 6 9-6M88 30l-4 6 6 9M80 82l-9-5 -3 11M20 82l9-5 3 11M12 30l4 6 -6 9" fill="#142019" stroke="#142019" stroke-width="2" stroke-linejoin="round"/></svg></div></div><p class="sp-msg">Cargando…</p></div>
 <div id="app"></div>
 <div id="sheet"></div>
 <script id="logic">
@@ -1125,8 +1143,11 @@ async function initAuth() {
   UI.hold = true; // una sola pintada al terminar de cargar, para que no parpadee
   try {
   if (!sid()) { S.ui.tab = 'settings'; UI.err.auth = 'Pega el enlace de tu Google Sheet en Ajustes.'; render(); return; }
+  splashMsg('Leyendo el Excel…');
   await refreshSheets();
+  splashMsg('Calculando estadísticas…');
   await loadStats(true);
+  splashMsg('Datos de la federación…');
   await loadFfcv();
   await importFfcvIfPending();
   let jq = null; try { jq = sessionStorage.getItem('apolo-j'); sessionStorage.removeItem('apolo-j'); } catch (e) {}
@@ -2956,6 +2977,39 @@ setInterval(() => {
   if (m.clock.phase === 'h1' || m.clock.phase === 'h2') { const mn = clockMinute(m.clock, H()); if (mn !== UI.lastMin) { UI.lastMin = mn; render(); } }
 }, 5000);
 
+// ===== PANTALLA DE CARGA =====
+// Mientras gira el balón se lee todo del Excel y de la federación; al terminar, disparo a la escuadra del logo y fundido.
+const splashMsg = t => { const e = document.querySelector('#splash .sp-msg'); if (e) e.textContent = t; };
+async function splashRun(work) {
+  const t0 = Date.now();
+  await Promise.race([Promise.resolve(work).catch(() => {}), new Promise(r => setTimeout(r, 9000))]);
+  const wait = 1300 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  const sp = $('#splash'); if (!sp) return;
+  const ball = sp.querySelector('.sp-ball'), tgt = sp.querySelector('.sp-target'), logo = sp.querySelector('.sp-logo');
+  splashMsg('');
+  try {
+    const b = ball.getBoundingClientRect(), t = tgt.getBoundingClientRect();
+    const dx = t.left - (b.left + b.width / 2), dy = t.top - (b.top + b.height / 2);
+    ball.classList.add('shot');
+    const a = ball.animate([
+      { transform: 'translate(0,0) scale(1) rotate(0deg)' },
+      { transform: `translate(${dx * 0.12}px, 18px) scale(1.08) rotate(-40deg)`, offset: 0.18 },
+      { transform: `translate(${dx * 0.6}px, ${dy * 0.75 - 70}px) scale(.72) rotate(420deg)`, offset: 0.62 },
+      { transform: `translate(${dx}px, ${dy}px) scale(.36) rotate(760deg)` }], { duration: 760, easing: 'cubic-bezier(.3,.1,.3,1)', fill: 'forwards' });
+    await a.finished;
+    logo.classList.add('hit');
+    await new Promise(r => setTimeout(r, 380));
+  } catch (e) {}
+  sp.classList.add('out');
+  setTimeout(() => sp.remove(), 500);
+}
+// si la app vuelve después de un buen rato en segundo plano (y no hay directo), se recarga entera, como recién abierta
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  const m = cur(); const live = m && ['h1', 'ht', 'h2'].includes(m.clock.phase);
+  if (hiddenAt && Date.now() - hiddenAt > 20 * 60000 && !live && !UI.sheet && !UI.addT) { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} location.reload(); }
+});
 function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}
   if (S.stats.v !== 3) S.stats = { v: 3, at: 0, sums: {} }; // v3: sin Ainhoa y minutos por jornada
@@ -2963,9 +3017,11 @@ function start() {
   if (S.current == null && S.sheets[0]) S.current = S.sheets[0].id;
   pickStartJornada(); S.ui.railOpen = false;
   if (S.current != null && !S.matches[S.current] && (sheetById(S.current) || S.sheets[0])) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
+  // al abrir la app se empieza de cero: pestaña Partido, en la jornada que toca (salvo un directo en marcha)
+  S.ui.tab = 'match'; S.ui.stepsOpen = false;
   render();
   const chip = document.getElementById('j' + S.current); if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest' });
-  initAuth();
+  splashRun(initAuth());
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 start();

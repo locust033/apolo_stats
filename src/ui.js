@@ -218,8 +218,11 @@ async function initAuth() {
   UI.hold = true; // una sola pintada al terminar de cargar, para que no parpadee
   try {
   if (!sid()) { S.ui.tab = 'settings'; UI.err.auth = 'Pega el enlace de tu Google Sheet en Ajustes.'; render(); return; }
+  splashMsg('Leyendo el Excel…');
   await refreshSheets();
+  splashMsg('Calculando estadísticas…');
   await loadStats(true);
+  splashMsg('Datos de la federación…');
   await loadFfcv();
   await importFfcvIfPending();
   let jq = null; try { jq = sessionStorage.getItem('apolo-j'); sessionStorage.removeItem('apolo-j'); } catch (e) {}
@@ -2049,6 +2052,39 @@ setInterval(() => {
   if (m.clock.phase === 'h1' || m.clock.phase === 'h2') { const mn = clockMinute(m.clock, H()); if (mn !== UI.lastMin) { UI.lastMin = mn; render(); } }
 }, 5000);
 
+// ===== PANTALLA DE CARGA =====
+// Mientras gira el balón se lee todo del Excel y de la federación; al terminar, disparo a la escuadra del logo y fundido.
+const splashMsg = t => { const e = document.querySelector('#splash .sp-msg'); if (e) e.textContent = t; };
+async function splashRun(work) {
+  const t0 = Date.now();
+  await Promise.race([Promise.resolve(work).catch(() => {}), new Promise(r => setTimeout(r, 9000))]);
+  const wait = 1300 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  const sp = $('#splash'); if (!sp) return;
+  const ball = sp.querySelector('.sp-ball'), tgt = sp.querySelector('.sp-target'), logo = sp.querySelector('.sp-logo');
+  splashMsg('');
+  try {
+    const b = ball.getBoundingClientRect(), t = tgt.getBoundingClientRect();
+    const dx = t.left - (b.left + b.width / 2), dy = t.top - (b.top + b.height / 2);
+    ball.classList.add('shot');
+    const a = ball.animate([
+      { transform: 'translate(0,0) scale(1) rotate(0deg)' },
+      { transform: `translate(${dx * 0.12}px, 18px) scale(1.08) rotate(-40deg)`, offset: 0.18 },
+      { transform: `translate(${dx * 0.6}px, ${dy * 0.75 - 70}px) scale(.72) rotate(420deg)`, offset: 0.62 },
+      { transform: `translate(${dx}px, ${dy}px) scale(.36) rotate(760deg)` }], { duration: 760, easing: 'cubic-bezier(.3,.1,.3,1)', fill: 'forwards' });
+    await a.finished;
+    logo.classList.add('hit');
+    await new Promise(r => setTimeout(r, 380));
+  } catch (e) {}
+  sp.classList.add('out');
+  setTimeout(() => sp.remove(), 500);
+}
+// si la app vuelve después de un buen rato en segundo plano (y no hay directo), se recarga entera, como recién abierta
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  const m = cur(); const live = m && ['h1', 'ht', 'h2'].includes(m.clock.phase);
+  if (hiddenAt && Date.now() - hiddenAt > 20 * 60000 && !live && !UI.sheet && !UI.addT) { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} location.reload(); }
+});
 function start() {
   try { const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (raw && raw.settings) S = Object.assign(defaultState(), raw, { settings: Object.assign(defaultState().settings, raw.settings), ui: Object.assign(defaultState().ui, raw.ui || {}) }); } catch (e) {}
   if (S.stats.v !== 3) S.stats = { v: 3, at: 0, sums: {} }; // v3: sin Ainhoa y minutos por jornada
@@ -2056,9 +2092,11 @@ function start() {
   if (S.current == null && S.sheets[0]) S.current = S.sheets[0].id;
   pickStartJornada(); S.ui.railOpen = false;
   if (S.current != null && !S.matches[S.current] && (sheetById(S.current) || S.sheets[0])) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
+  // al abrir la app se empieza de cero: pestaña Partido, en la jornada que toca (salvo un directo en marcha)
+  S.ui.tab = 'match'; S.ui.stepsOpen = false;
   render();
   const chip = document.getElementById('j' + S.current); if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest' });
-  initAuth();
+  splashRun(initAuth());
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 start();
