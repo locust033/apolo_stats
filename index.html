@@ -866,25 +866,51 @@ function positionStats(summaries) {
   for (const k in out) for (const sl in out[k]) out[k][sl].min = Math.round(out[k][sl].min);
   return out;
 }
-// puntuación de una jugadora para un hueco: minutos ahí + la mitad de lo jugado en el hueco equivalente (+ partidos, para la J sin minutos)
-function slotScore(ps, key, slot) {
+// puntuación de una jugadora para un hueco: minutos (y partidos) en ESE hueco exacto.
+// El hueco gemelo (4↔5, 6↔8) cuenta muy poco: solo sirve si no hay nadie con historial en el hueco exacto,
+// así la pareja de centrales o de mediocentros sale cada una por su lado de siempre.
+function slotScore(ps, key, slot, mirror = 0.1) {
   const o = ps[key] || {}; const own = o[slot] || { min: 0, games: 0 };
   let sc = own.min + own.games * 10;
-  for (const e of SAME_POS[slot] || []) { const x = o[e]; if (x) sc += (x.min + x.games * 10) / 2; }
+  for (const e of SAME_POS[slot] || []) { const x = o[e]; if (x) sc += (x.min + x.games * 10) * mirror; }
   return sc;
 }
-// Once sugerido: rellena los huecos vacíos con las convocadas que más han jugado en cada posición.
+// asignación óptima (Hungarian): filas = huecos, columnas = jugadoras (n <= m). Devuelve col por fila.
+function assignMax(score) {
+  const n = score.length, m = n ? score[0].length : 0; if (!n || !m) return [];
+  const N = Math.max(n, m), INF = 1e18;
+  const big = Math.max(0, ...score.flat()) + 1;
+  const cost = (i, j) => (i < n && j < m) ? big - score[i][j] : big;
+  const u = new Array(N + 1).fill(0), v = new Array(N + 1).fill(0), p = new Array(N + 1).fill(0), way = new Array(N + 1).fill(0);
+  for (let i = 1; i <= N; i++) {
+    p[0] = i; let j0 = 0; const minv = new Array(N + 1).fill(INF), usedC = new Array(N + 1).fill(false);
+    do {
+      usedC[j0] = true; const i0 = p[j0]; let delta = INF, j1 = 0;
+      for (let j = 1; j <= N; j++) if (!usedC[j]) {
+        const cur = cost(i0 - 1, j - 1) - u[i0] - v[j];
+        if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+      }
+      for (let j = 0; j <= N; j++) { if (usedC[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta; }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const res = new Array(n).fill(-1);
+  for (let j = 1; j <= N; j++) if (p[j] && p[j] <= n && j <= m) res[p[j] - 1] = j - 1;
+  return res;
+}
+// Once sugerido: rellena los huecos vacíos buscando el reparto que más se parece a lo que han jugado
+// (en conjunto, no hueco a hueco), respetando el lado exacto de cada una.
 // La portería solo se sugiere a quien ha jugado de portera; si no hay ninguna convocada, se queda vacía.
 function suggestLineup(ps, slots, candidates, lineup = {}) {
   const used = new Set(Object.values(lineup)); const res = { ...lineup };
   const free = slots.filter(sl => !res[sl]);
-  const pairs = [];
-  for (const sl of free) for (const c of candidates) {
-    if (used.has(c.id)) continue;
-    const sc = slotScore(ps, c.key, +sl); if (sc > 0) pairs.push([sc, sl, c.id]);
-  }
-  pairs.sort((a, b) => b[0] - a[0]);
-  for (const [, sl, id] of pairs) { if (res[sl] || used.has(id)) continue; res[sl] = id; used.add(id); }
+  const cands = candidates.filter(c => !used.has(c.id));
+  if (!free.length || !cands.length) return res;
+  const M = free.map(sl => cands.map(c => slotScore(ps, c.key, +sl)));
+  const asg = assignMax(M);
+  free.forEach((sl, i) => { const j = asg[i]; if (j >= 0 && M[i][j] > 0) res[sl] = cands[j].id; });
   return res;
 }
 // Capitanas por turno: después de la última que llevó el brazalete, la siguiente convocada de la lista
