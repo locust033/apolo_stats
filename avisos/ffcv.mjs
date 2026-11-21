@@ -14,15 +14,20 @@ async function crest(cod, url) {
   const path = String(url).split('?')[0]; const ext = (path.match(/\.(png|jpe?g|gif|webp|svg)$/i) || [, 'png'])[1].toLowerCase();
   const rel = `escudos/${cod}.${ext}`; const file = `data/${rel}`;
   if (fs.existsSync(file)) return rel;
-  for (const host of ['https://ffcv.es', 'https://resultadosffcv.isquad.es']) {
+  const tried = [];
+  for (const host of ['https://ffcv.es', 'https://www.ffcv.es', 'https://resultadosffcv.isquad.es', 'https://www.isquad.es']) {
     try {
-      const r = await fetch(/^https?:/.test(url) ? url : host + url, { headers: { ...HEADERS, Accept: 'image/*', 'Sec-Fetch-Dest': 'image', 'Sec-Fetch-Mode': 'no-cors' } });
-      const ct = r.headers.get('content-type') || '';
-      if (!r.ok || !/image/.test(ct)) continue;
-      fs.mkdirSync('data/escudos', { recursive: true }); fs.writeFileSync(file, Buffer.from(await r.arrayBuffer()));
+      const u = /^https?:/.test(url) ? url : host + url;
+      const r = await fetch(u, { headers: { ...HEADERS, Accept: 'image/avif,image/webp,image/*,*/*;q=0.8', 'Sec-Fetch-Dest': 'image', 'Sec-Fetch-Mode': 'no-cors' } });
+      const buf = Buffer.from(await r.arrayBuffer());
+      const img = buf.length > 100 && (buf[0] === 0x89 || (buf[0] === 0xff && buf[1] === 0xd8) || buf.slice(0, 3).toString() === 'GIF' || buf.slice(8, 12).toString() === 'WEBP' || /<svg/i.test(buf.slice(0, 300).toString()));
+      tried.push(`${host} ${r.status} ${r.headers.get('content-type')} ${buf.length}`);
+      if (!r.ok || !img) continue;
+      fs.mkdirSync('data/escudos', { recursive: true }); fs.writeFileSync(file, buf);
       return rel;
-    } catch (e) {}
+    } catch (e) { tried.push(`${host} ${e.message}`); }
   }
+  if (!crest.logged) { crest.logged = 1; console.log('Escudo, intentos:', tried.join(' | ')); }
   console.log('Sin escudo:', cod, url); return '';
 }
 const MAX_AGE_H = 6;
