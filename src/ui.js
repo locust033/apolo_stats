@@ -1639,7 +1639,7 @@ async function buildTeamExcel(manual = false) {
     }
     S.settings.build = null; UI.buildMsg = ''; S.current = null; persist();
     showToast(`Excel creado: ${newSheets.length} jornadas y ${players.length} jugadoras de la federación.`);
-    UI.building = false; initAuth();
+    UI.building = false; withSplash(initAuth(), 'Abriendo el Excel nuevo…');
   } catch (e) { UI.building = false; UI.buildMsg = 'No se pudo crear el Excel: ' + (e.message || errText(e)); render(); }
 }
 
@@ -1665,8 +1665,8 @@ function activateProfile(id, fresh = null, dropCurrent = false) {
   Object.values(S.matches).forEach(migrateMatch);
   UI.sheet = null; UI.pickIn = null; UI.pickMove = null; UI.editSid = false; UI.err = {}; AV.loaded = false; AV.loading = false;
   FFCV_SNAP = null; loadFfcvCache();
-  S.ui.tab = 'match'; S.ui.scoutCod = null; S.ui.home = true;
-  persist(); render(); initAuth();
+  S.ui.tab = 'match'; S.ui.scoutCod = null; S.ui.home = S.settings.startView !== 'next';
+  persist(); render(); withSplash(initAuth(), 'Cargando el Excel del equipo…');
 }
 // Antes de cambiar de equipo: si hay jornadas sin guardar, pregunta
 function guardSwitch(fn) {
@@ -1996,7 +1996,7 @@ const ACT = {
     if (!newId || newId === v && !/^[a-zA-Z0-9_-]{20,}$/.test(v)) { S.settings.sid = prev; UI.err.sid = 'Eso no parece un enlace de Google Sheets.'; return render(); }
     if (!prev) { // primer Excel
       if (!ready()) { persist(); UI.editSid = false; return signIn(''); }
-      try { await call('get_spreadsheet', {}, { read: true }); UI.editSid = false; UI.err.sid = null; UI.err.auth = null; persist(); S.ui.tab = 'match'; initAuth(); }
+      try { await call('get_spreadsheet', {}, { read: true }); UI.editSid = false; UI.err.sid = null; UI.err.auth = null; S.ui.tab = 'match'; S.ui.home = S.settings.startView !== 'next'; persist(); withSplash(initAuth(), 'Conectando el Excel…'); }
       catch (e) { S.settings.sid = prev; UI.err.sid = 'No he podido abrir ese Excel: ' + errText(e); render(); }
       return;
     }
@@ -2289,6 +2289,19 @@ const BALL_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGra
 const ballSpin = (cls = '') => `<span class="ballspin ${cls}" aria-hidden="true">${BALL_SVG}</span>`;
 // Mientras gira el balón se lee todo del Excel y de la federación; al terminar, disparo a la escuadra del logo y fundido.
 const splashMsg = t => { const e = document.querySelector('#splash .sp-msg'); if (e) e.textContent = t; };
+// Pantalla de carga otra vez (al conectar o cambiar de Excel): se crea de nuevo y entra con un fundido
+function splashShow(msg = 'Cargando…') {
+  let sp = $('#splash');
+  if (sp && sp.classList.contains('out')) { sp.id = ''; sp = null; } // la anterior aún se está yendo: se deja ir y se pone una nueva
+  if (!sp) {
+    sp = document.createElement('div'); sp.id = 'splash';
+    sp.innerHTML = `<div class="sp-ball">${BALL_SVG}</div><p class="sp-msg"></p>`;
+    document.body.prepend(sp);
+    try { sp.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' }); } catch (e) {}
+  }
+  splashMsg(msg);
+}
+const withSplash = (work, msg) => { splashShow(msg); return splashRun(work); };
 async function splashRun(work) {
   const t0 = Date.now();
   await Promise.race([Promise.resolve(work).catch(() => {}), new Promise(r => setTimeout(r, 9000))]);
