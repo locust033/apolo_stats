@@ -1,32 +1,19 @@
-// Datos de la federación (FFCV) para la app: clasificación, resultados, calendario del Apolo,
-// goleadoras/tarjetas/sistemas de cada equipo y sanciones. Se guardan en la pestaña oculta «FFCV» del Excel.
-// Se actualiza solo cada 6 horas, o antes si la app lo pide (fila «ffcv_sync» en la pestaña AVISOS).
+// Datos de la federación (FFCV) para la app: clasificación, resultados, calendario del equipo,
+// goleadoras/tarjetas/sistemas de cada equipo y sanciones.
+//  · Juvenil (el Excel principal): en la pestaña oculta «FFCV» de su Excel.
+//  · Otros equipos añadidos desde la app (filas «equipo» de la pestaña AVISOS): en data/ffcv/<equipo>.json (lo sirve GitHub Pages).
+// Se actualiza solo cada 6 horas, o antes si la app lo pide (filas «ffcv_sync» / «ffcv_sync:<equipo>» en AVISOS).
+import fs from 'node:fs';
 import { configured, sheetsMeta, readRange, writeRange, clearRange, batchUpdate, setAvisosKey } from './lib.mjs';
 
-const T = '22', C = '905431657', G = '905431660', APOLO = '905446426';
-const BASE = 'https://ffcv.es/competiciones/';
+const JUVENIL = { t: '22', c: '905431657', g: '905431660', team: '905446426' };
+import { get, pool } from './ffcvhttp.mjs';
 const MAX_AGE_H = 6;
 const FORCE = process.env.FORCE === '1';
-// Cabeceras como las de un navegador en la propia web (sin ellas, la FFCV bloquea con «Token de página inválido»)
-const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', Accept: '*/*', 'Accept-Language': 'es-ES,es;q=0.9',
-  Referer: 'https://ffcv.es/competiciones/?view=partidos', 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty',
-  'sec-ch-ua': '"Chromium";v="130"', 'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"macOS"' };
-
-async function get(path, tries = 3) {
-  for (let i = 0; ; i++) {
-    try {
-      const r = await fetch(BASE + path, { headers: HEADERS });
-      const t = await r.text();
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return JSON.parse(t);
-    } catch (e) { if (i + 1 >= tries) throw new Error(`FFCV ${path.split('?')[0]}: ${e.message}`); await new Promise(r => setTimeout(r, 1500 * (i + 1))); }
-  }
-}
-async function pool(items, n, fn) { const out = []; let k = 0; await Promise.all(Array.from({ length: n }, async () => { while (k < items.length) { const i = k++; out[i] = await fn(items[i]); } })); return out; }
 const played = p => /\d+\s*-\s*\d+/.test(p.resultado || '') && String(p.estado) !== '0';
 const ddmmyyyy = s => String(s || '').replace(/-/g, '/');
 
-async function build() {
+async function build({ t: T, c: C, g: G, team: APOLO }) {
   const qs = `cod_temporada=${T}&cod_competicion=${C}&cod_grupo=${G}`;
   const jf = await get(`api/filtros/jornadas_fetch.php?cod_grupo=${G}`);
   const jornadas = (jf.jornadas || []).map(j => +j.codjornada).filter(Boolean).sort((a, b) => a - b);
@@ -82,32 +69,52 @@ async function build() {
   return { rows, summary: `${(clas.clasificacion || []).length} equipos, ${done.length} partidos jugados, jornada ${lastJ}` };
 }
 
+function fileAge(team) { try { const j = JSON.parse(fs.readFileSync(`data/ffcv/${team}.json`, 'utf8')); return j.at || ''; } catch (e) { return ''; } }
+const needs = (at, req) => FORCE || !at || (Date.now() - Date.parse(at)) / 3600e3 >= MAX_AGE_H || (req && Date.parse(req) > Date.parse(at));
+
 async function main() {
   if (!configured()) { console.log('Falta el secreto GOOGLE_SA.'); return; }
   const sheets = await sheetsMeta();
   const ffcv = sheets.find(s => s.title === 'FFCV');
+  const hasAv = sheets.some(s => s.title === 'AVISOS');
+  const av = hasAv ? await readRange("'AVISOS'!A1:B600") : [];
+  const key = k => (av.find(r => r[0] === k) || [])[1] || '';
+  // 1) Juvenil → pestaña FFCV de su Excel
   const at = ffcv ? ((await readRange("'FFCV'!A1:B1"))[0] || [])[1] : '';
-  let req = '';
-  if (sheets.some(s => s.title === 'AVISOS')) req = ((await readRange("'AVISOS'!A1:B600")).find(r => r[0] === 'ffcv_sync') || [])[1] || '';
-  const ageH = at ? (Date.now() - Date.parse(at)) / 3600e3 : Infinity;
-  const asked = req && (!at || Date.parse(req) > Date.parse(at));
-  if (!FORCE && !asked && ageH < MAX_AGE_H) { console.log(`FFCV al día (${ageH.toFixed(1)} h).`); return; }
-  console.log(asked ? 'Actualización pedida desde la app.' : 'Actualizando datos de la federación…');
-  try {
-    const { rows, summary } = await build();
-    const width = 13; const data = rows.map(r => { const o = r.slice(0, width); while (o.length < width) o.push(''); return o; });
-    if (!ffcv) await batchUpdate([{ addSheet: { properties: { title: 'FFCV', hidden: true, gridProperties: { rowCount: data.length + 200, columnCount: 14 } } } }]);
-    else if (ffcv.gridProperties.rowCount < data.length + 50) await batchUpdate([{ updateSheetProperties: { properties: { sheetId: ffcv.sheetId, gridProperties: { rowCount: data.length + 200, columnCount: 14 } }, fields: 'gridProperties.rowCount,gridProperties.columnCount' } }]);
-    await clearRange("'FFCV'!A1:N5000");
-    await writeRange(`'FFCV'!A1:M${data.length}`, data);
-    await writeRange("'FFCV'!N1", [[`ok · ${summary} · ${new Date().toISOString()}`]]);
-    if (sheets.some(s => s.title === 'AVISOS')) await setAvisosKey('ffcv_estado', `ok · ${summary} · ${new Date().toISOString()}`);
-    console.log('FFCV actualizado:', summary);
-  } catch (e) {
-    console.error(e);
-    const msg = `error · ${String(e.message || e).slice(0, 200)} · ${new Date().toISOString()}`;
-    try { if (ffcv) await writeRange("'FFCV'!N1", [[msg]]); if (sheets.some(s => s.title === 'AVISOS')) await setAvisosKey('ffcv_estado', msg); } catch (e2) { console.error(e2); }
-    process.exitCode = 1;
+  if (!needs(at, key('ffcv_sync'))) console.log('Juvenil al día.');
+  else {
+    console.log('Actualizando juvenil…');
+    try {
+      const { rows, summary } = await build(JUVENIL);
+      const width = 13; const data = rows.map(r => { const o = r.slice(0, width); while (o.length < width) o.push(''); return o; });
+      if (!ffcv) await batchUpdate([{ addSheet: { properties: { title: 'FFCV', hidden: true, gridProperties: { rowCount: data.length + 200, columnCount: 14 } } } }]);
+      else if (ffcv.gridProperties.rowCount < data.length + 50) await batchUpdate([{ updateSheetProperties: { properties: { sheetId: ffcv.sheetId, gridProperties: { rowCount: data.length + 200, columnCount: 14 } }, fields: 'gridProperties.rowCount,gridProperties.columnCount' } }]);
+      await clearRange("'FFCV'!A1:N5000");
+      await writeRange(`'FFCV'!A1:M${data.length}`, data);
+      await writeRange("'FFCV'!N1", [[`ok · ${summary} · ${new Date().toISOString()}`]]);
+      if (hasAv) await setAvisosKey('ffcv_estado', `ok · ${summary} · ${new Date().toISOString()}`);
+      console.log('Juvenil:', summary);
+    } catch (e) {
+      console.error(e); process.exitCode = 1;
+      const msg = `error · ${String(e.message || e).slice(0, 200)} · ${new Date().toISOString()}`;
+      try { if (ffcv) await writeRange("'FFCV'!N1", [[msg]]); if (hasAv) await setAvisosKey('ffcv_estado', msg); } catch (e2) { console.error(e2); }
+    }
+  }
+  // 2) Otros equipos → data/ffcv/<equipo>.json
+  const teams = av.filter(r => r[0] === 'equipo' && r[1]).map(r => { try { return JSON.parse(r[1]); } catch (e) { return null; } }).filter(x => x && x.team && x.g && x.c);
+  for (const cfg of teams) {
+    const fat = fileAge(cfg.team);
+    if (!needs(fat, key('ffcv_sync:' + cfg.team) || key('ffcv_sync'))) { console.log(`${cfg.name || cfg.team} al día.`); continue; }
+    try {
+      const { rows, summary } = await build({ t: cfg.t || '22', c: cfg.c, g: cfg.g, team: cfg.team });
+      fs.mkdirSync('data/ffcv', { recursive: true });
+      fs.writeFileSync(`data/ffcv/${cfg.team}.json`, JSON.stringify({ at: new Date().toISOString(), cfg, rows }));
+      if (hasAv) await setAvisosKey('ffcv_estado:' + cfg.team, `ok · ${summary} · ${new Date().toISOString()}`);
+      console.log(`${cfg.name || cfg.team}:`, summary);
+    } catch (e) {
+      console.error(e); process.exitCode = 1;
+      if (hasAv) await setAvisosKey('ffcv_estado:' + cfg.team, `error · ${String(e.message || e).slice(0, 200)} · ${new Date().toISOString()}`);
+    }
   }
 }
 main();

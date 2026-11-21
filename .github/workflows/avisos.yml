@@ -1,6 +1,6 @@
 name: Avisos Apolo
 # Cada 10 minutos: manda los avisos al móvil (martes de horarios y día de partido)
-# y actualiza los datos de la federación en el Excel (cada 6 h, o cuando la app lo pide).
+# y actualiza los datos de la federación (cada 6 h, o cuando la app lo pide) y el catálogo de equipos (cada semana).
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -14,7 +14,7 @@ concurrency: avisos
 jobs:
   avisos:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +32,15 @@ jobs:
         env:
           GOOGLE_SA: ${{ secrets.GOOGLE_SA }}
           SHEET_ID: 1NIOy0FJE7ZojeUCjoY0qkNdH0_nSJNEnHTcigUdzGY0
+      - name: Catálogo de la federación
+        run: node avisos/catalogo.mjs
+        continue-on-error: true
+      - name: Guardar datos de la federación en la web de la app
+        run: |
+          if [ -n "$(git status --porcelain data)" ]; then
+            git config user.name "apolo-avisos"; git config user.email "apolo-avisos@users.noreply.github.com"
+            git add data && git commit -q -m "Datos de la federación" && (git pull -q --rebase && git push -q || git push -q)
+          fi
       # GitHub para las tareas programadas de repositorios sin cambios en 60 días: un commit vacío al mes lo evita
       - name: Mantener activo
         run: |

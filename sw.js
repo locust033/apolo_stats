@@ -8,6 +8,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (u.hostname.endsWith('googleapis.com') && !u.hostname.startsWith('fonts')) return; // datos de Google Sheets: siempre en directo
   if (u.hostname === 'accounts.google.com') return;
+  if (u.pathname.includes('/data/')) return; // datos de la federación: siempre en directo
   if (e.request.mode === 'navigate' || u.pathname.endsWith('/index.html')) {
     e.respondWith(fetch(e.request).then(r => { const c = r.clone(); caches.open(VERSION).then(ca => ca.put('./index.html', c)); return r; }).catch(() => caches.match('./index.html')));
     return;
