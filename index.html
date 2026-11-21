@@ -461,6 +461,13 @@ nav.bottom button.on .ic { color: var(--accent); }
 .plist button .pi { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; }
 .plist button .pi small { color: var(--muted); font-size: 12px; font-weight: 500; }
 .plist button.sug .pi small { color: var(--good); font-weight: 700; }
+/* Añadir equipo */
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#teamQ { width: 100%; margin: 6px 0 10px; }
+.teamres { max-height: 60vh; overflow: auto; }
+.selteam { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--good) 10%, transparent); margin-bottom: 12px; }
+.selteam small { color: var(--muted); }
+.selteam .link { align-self: flex-start; }
 
 </style>
 </head>
@@ -1000,14 +1007,15 @@ async function gfetch(path, opts = {}) {
   return r.json();
 }
 const enc = encodeURIComponent;
+const S_ = i => (i && i.sid) || sid(); // permite leer/escribir en otro Excel (p. ej. el principal)
 const TOOLS = {
-  get_spreadsheet: () => gfetch(`${sid()}?fields=${enc('properties.title,sheets.properties(sheetId,title,hidden,gridProperties)')}`),
-  get_values: i => gfetch(`${sid()}/values/${enc(i.range)}`),
-  batch_get: i => gfetch(`${sid()}/values:batchGet?${i.ranges.map(r => 'ranges=' + enc(r)).join('&')}`),
-  update_values: i => gfetch(`${sid()}/values/${enc(i.range)}?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: i.values }) }),
-  update_formulas: i => gfetch(`${sid()}/values/${enc(i.range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', body: JSON.stringify({ values: i.formulas }) }),
-  clear_values: i => gfetch(`${sid()}/values/${enc(i.range)}:clear`, { method: 'POST', body: '{}' }),
-  update_spreadsheet: i => gfetch(`${sid()}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: i.requests }) }),
+  get_spreadsheet: i => gfetch(`${S_(i)}?fields=${enc('properties.title,sheets.properties(sheetId,title,hidden,gridProperties)')}`),
+  get_values: i => gfetch(`${S_(i)}/values/${enc(i.range)}`),
+  batch_get: i => gfetch(`${S_(i)}/values:batchGet?${i.ranges.map(r => 'ranges=' + enc(r)).join('&')}`),
+  update_values: i => gfetch(`${S_(i)}/values/${enc(i.range)}?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: i.values }) }),
+  update_formulas: i => gfetch(`${S_(i)}/values/${enc(i.range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', body: JSON.stringify({ values: i.formulas }) }),
+  clear_values: i => gfetch(`${S_(i)}/values/${enc(i.range)}:clear`, { method: 'POST', body: '{}' }),
+  update_spreadsheet: i => gfetch(`${S_(i)}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: i.requests }) }),
 };
 async function call(tool, input = {}, { read = false } = {}) {
   try { return await TOOLS[tool](input); }
@@ -1062,9 +1070,25 @@ function parseFfcvRows(rows) {
   }
   return s.clas.length ? s : null;
 }
+// Equipo en la federación de cada Excel (el juvenil, fijo; los demás, el que se eligió al añadirlo)
+const ffcvCfg = () => S.settings.ffcv || (isLegacy() ? { t: FFCV_TEMP, c: FFCV_COMP, g: FFCV_GRUPO, team: APOLO_COD, name: "C.D. Apolo 'A'" } : null);
+const ourCod = () => (ffcvCfg() || {}).team || APOLO_COD;
+const isOurs = n => { const c = ffcvCfg(); return c && c.name ? rivalKey(n) === rivalKey(c.name) : /apolo/i.test(str(n)); };
+// Id del Excel principal (juvenil): ahí está la pestaña AVISOS que lee el proceso de GitHub
+const mainSid = () => (isLegacy() ? sid() : (Object.entries(S.profiles || {}).find(([, p]) => !p.settings || p.settings.legacy !== false) || [])[0]);
 const ffcvKey = () => (S.settings.legacy === false ? FFCV_KEY + ':' + sid() : FFCV_KEY);
 function loadFfcvCache() { try { FFCV_SNAP = JSON.parse(localStorage.getItem(ffcvKey()) || 'null'); } catch (e) {} }
 async function loadFfcv() {
+  if (!isLegacy()) {
+    const c = ffcvCfg(); if (!c) { FFCV_SNAP = null; return; }
+    try {
+      const r = await fetch(`data/ffcv/${c.team}.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json(); const snap = parseFfcvRows([['at', j.at], ...(j.rows || []).filter(x => x[0] !== 'at')]);
+      if (snap) { FFCV_SNAP = snap; try { localStorage.setItem(ffcvKey(), JSON.stringify(snap)); } catch (e) {} }
+    } catch (e) {}
+    return;
+  }
   try {
     const p = await call('get_values', { range: `'FFCV'!A1:M2000` }, { read: true });
     const snap = parseFfcvRows(p.values);
@@ -1110,6 +1134,7 @@ async function initAuth() {
   if (jq && sheetById(jq)) { S.current = +jq; S.ui.tab = 'match'; } else pickStartJornada();
   const m = cur();
   // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
+  if (S.settings.build) { await loadFfcv(); UI.hold = false; buildTeamExcel(); if (!UI.buildTimer) UI.buildTimer = setInterval(() => { if (S.settings.build && !UI.building) buildTeamExcel(); else if (!S.settings.build) { clearInterval(UI.buildTimer); UI.buildTimer = null; } }, 60000); return; }
   if (!S.sheets.length) { UI.err.sheets = 'Este Excel no tiene hojas de jornada (con nombres tipo «1 - RIVAL»).'; S.ui.tab = 'settings'; return; }
   await openMatch(S.current ?? S.sheets[0].id, { reload: !(m && (m.dirty || ['h1', 'ht', 'h2'].includes(m.clock.phase))) });
   } finally { UI.hold = false; render(); }
@@ -1203,7 +1228,7 @@ function autoStep(m) {
 // Rival de la jornada según la federación
 function ffcvRivalTeam(m) {
   if (!FFCV_SNAP) return null; const f = ffcvFor(m); if (!f) return null;
-  const c = teamByName(/apolo/i.test(f.local) ? f.visit : f.local); if (!c) return null;
+  const c = teamByName(isOurs(f.local) ? f.visit : f.local); if (!c) return null;
   return { clas: c, team: FFCV_SNAP.teams.find(x => x.cod === c[1]) || { pl: [], es: [] } };
 }
 // Destacadas de la federación: goleadoras y jugadoras con tarjetas. Se muestran como sugerencia (fed: true)
@@ -1607,6 +1632,7 @@ function pickStartJornada() {
   return false;
 }
 function matchView(m) {
+  if (S.settings.build) return `<section class="pad"><div class="card"><h3 class="h3">Preparando el Excel de ${esc((ffcvCfg() || {}).name || 'este equipo')}</h3><p>${esc(UI.buildMsg || 'Un momento…')}</p>${UI.building ? '' : '<button class="btn" data-act="buildCheck">Comprobar ahora</button>'}</div></section>`;
   if (!m) return jornadaRail() + `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
   if (m.finalized) {
     const loading0 = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
@@ -1630,16 +1656,16 @@ const nextBtn = (to, label) => `<button class="btn primary wide" data-act="step"
 // Calendario del Apolo: el de la federación (pestaña FFCV, se actualiza solo) o, si no hay, el guardado en la app. Sin jornadas de descanso.
 const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c.length ? c : (S.settings.legacy === false ? [] : FFCV); };
 const ffcvFor = m => { const f = ffcvCal()[sheetShort(m.title).n - 1]; return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
-const awayOf = t => { const f = FFCV[sheetShort(t).n - 1]; return !!f && !/apolo/i.test(f[3]); };
+const awayOf = t => { const f = ffcvCal()[sheetShort(t).n - 1]; return !!f && !isOurs(f[3]); };
 // convierte un marcador del Excel (local - visitante) a "nosotras - rival"
 const ourView = (s, away) => { const m = str(s).match(/(\d+)\s*-\s*(\d+)/); if (!m) return str(s); return away ? `${m[2]} - ${m[1]}` : `${m[1]} - ${m[2]}`; };
-const ffcvAppUrl = f => `https://resultadosffcv.isquad.es/partido.php?id_competition=${FFCV_COMP}&id_partido=${f.acta}&id_torneo=${FFCV_GRUPO}`;
-const ffcvWebUrl = f => `https://ffcv.es/competiciones/?view=partidos&cod_temporada=${FFCV_TEMP}&cod_competicion=${FFCV_COMP}&cod_grupo=${FFCV_GRUPO}&cod_jornada=${f.j}#partidos`;
+const ffcvAppUrl = f => `https://resultadosffcv.isquad.es/partido.php?id_competition=${(ffcvCfg() || {}).c}&id_partido=${f.acta}&id_torneo=${(ffcvCfg() || {}).g}`;
+const ffcvWebUrl = f => { const c = ffcvCfg() || {}; return `https://ffcv.es/competiciones/?view=partidos&cod_temporada=${c.t || FFCV_TEMP}&cod_competicion=${c.c}&cod_grupo=${c.g}&cod_jornada=${f.j}#partidos`; };
 const lugarFmt = s => up(str(s).replace(/Mpal\./gi, 'Municipal').replace(/\s*F-11\b/gi, '').replace(/`/g, "'").replace(/\s+/g, ' '));
 function ffcvBlock(m) {
   const f = ffcvFor(m); if (!f) return '';
   const snapAt = FFCV_SNAP && FFCV_SNAP.at ? new Date(FFCV_SNAP.at).toLocaleDateString('es-ES') : 'del calendario';
-  const home = /apolo/i.test(f.local);
+  const home = isOurs(f.local);
   return `<div class="ffcv"><div class="ffcvinfo"><span class="eyebrow">Federación · jornada ${f.j}</span>
       <span>${home ? 'En casa' : 'Fuera'} · ${esc(title(home ? f.visit : f.local))} · ${esc(f.fecha)} ${esc(f.hora)}</span>
       <small class="muted">Horario según la federación (${esc(snapAt)}): puede haber cambiado. La fecha y la hora se rellenan solas el día del partido.</small></div>
@@ -2001,8 +2027,8 @@ const nameFmt = n => { n = str(n); if (n.includes(',')) { const [ap, no] = n.spl
 const teamByName = name => { const k = rivalKey(name); return FFCV_SNAP.clas.find(c => rivalKey(c[2]) === k) || FFCV_SNAP.clas.find(c => rivalKey(c[2]).includes(k) || k.includes(rivalKey(c[2]))); };
 function defaultScoutCod() {
   const m = cur(); const f = m && ffcvFor(m);
-  if (f) { const t = teamByName(/apolo/i.test(f.local) ? f.visit : f.local); if (t) return t[1]; }
-  return FFCV_SNAP.clas.find(c => c[1] !== APOLO_COD)[1];
+  if (f) { const t = teamByName(isOurs(f.local) ? f.visit : f.local); if (t) return t[1]; }
+  return (FFCV_SNAP.clas.find(c => c[1] !== ourCod()) || [])[1];
 }
 function teamResults(cod) {
   return FFCV_SNAP.matches.filter(x => x[2] === cod || x[3] === cod).map(x => {
@@ -2019,7 +2045,7 @@ function scoutView(forceCod = null, embedded = false) {
   const isNext = cod === defaultScoutCod();
   // equipos por orden alfabético (sin «C.F.», «U.D.»… delante)
   const tLabel = c => title(c[2]).replace(/^[A-Z]\.[A-Z]\.(?:[A-Z]\.)?\s*/i, '');
-  const chips = embedded ? '' : `<div class="chips scroll">${FFCV_SNAP.clas.filter(c => c[1] !== APOLO_COD).sort((x, y) => tLabel(x).localeCompare(tLabel(y), 'es', { sensitivity: 'base' })).map(c => `<button class="chip ${c[1] === cod ? 'on' : ''}" data-act="scoutTeam" data-v="${c[1]}">${esc(tLabel(c))}</button>`).join('')}</div>`;
+  const chips = embedded ? '' : `<div class="chips scroll">${FFCV_SNAP.clas.filter(c => c[1] !== ourCod()).sort((x, y) => tLabel(x).localeCompare(tLabel(y), 'es', { sensitivity: 'base' })).map(c => `<button class="chip ${c[1] === cod ? 'on' : ''}" data-act="scoutTeam" data-v="${c[1]}">${esc(tLabel(c))}</button>`).join('')}</div>`;
   const res = teamResults(cod);
   const pill = r => { const k = { G: 'w', E: 'd', P: 'l' }[r] || r; return `<i class="rpill ${k}">${{ w: 'V', d: 'E', l: 'D' }[k]}</i>`; };
   const esc_ = team.es.reduce((o, e) => (o[e] = (o[e] || 0) + 1, o), {}); const esTop = Object.entries(esc_).sort((a, b) => b[1] - a[1])[0];
@@ -2035,7 +2061,7 @@ function scoutView(forceCod = null, embedded = false) {
     return { n: nameFmt(s[3]), motivo: s[5] || s[4], partidos: s[6], fecha: s[0], pend: Math.max(0, s[6] - after) };
   });
   // rivales comunes
-  const ours = teamResults(APOLO_COD);
+  const ours = teamResults(ourCod());
   const common = [...new Set(ours.map(o => o.oppCod))].filter(c => c !== cod).map(c => ({ c, name: (ours.find(o => o.oppCod === c) || {}).opp, us: ours.filter(o => o.oppCod === c), them: res.filter(o => o.oppCod === c) })).filter(x => x.them.length);
   const head2 = ours.filter(o => o.oppCod === cod);
   const row = (p, extra) => `<li><span class="disc sm">${esc(p.d)}</span><b>${esc(p.n)}</b>${p.pos ? `<small>${esc(p.pos)}</small>` : ''}<span class="sp"></span>${extra}</li>`;
@@ -2065,6 +2091,7 @@ function scoutView(forceCod = null, embedded = false) {
 }
 
 function settingsView() {
+  if (UI.addT) return `<section class="pad">${addTeamView()}</section>`;
   return `<section class="pad"><div class="card">
     ${S.settings.sid && !UI.editSid
       ? teamsBlock()
@@ -2117,7 +2144,7 @@ async function avisosWrite() {
   if (rows.length) await writeVals(`'AVISOS'!A1:D${rows.length}`, rows.map(r => [r[0] ?? '', r[1] ?? '', r[2] ?? '', r[3] ?? '']));
 }
 function avisosCard() {
-  if (ready() && !AV.loaded && !AV.loading) { AV.loading = true; avisosLoad(); }
+  if (ready() && sid() && !AV.loaded && !AV.loading) { AV.loading = true; avisosLoad(); }
   const c = AV.cfg;
   const state = !pushSupported() ? '<p class="muted small">Este navegador no admite avisos. En el iPhone hacen falta iOS 16.4 o posterior y abrir la app desde el icono de la pantalla de inicio.</p>'
     : !isStandalone() ? '<p class="muted small">Para recibir avisos, abre la app desde su icono en la pantalla de inicio (no desde Safari).</p>'
@@ -2150,11 +2177,12 @@ function ffcvAge() {
   const t = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   return `datos FFCV ${h < 20 && d.getDate() === new Date().getDate() ? 'de hoy a las ' + t : 'del ' + d.toLocaleDateString('es-ES') + ' ' + t}`;
 }
-async function setAvisosKeyApp(key, val) {
-  await avisosEnsureSheet();
-  const rows = (await call('get_values', { range: `'AVISOS'!A1:B600` }, { read: true })).values || [];
-  const i = rows.findIndex(r => r[0] === key);
-  await writeVals(i >= 0 ? `'AVISOS'!A${i + 1}:B${i + 1}` : `'AVISOS'!A${rows.length + 1}:B${rows.length + 1}`, [[key, val]]);
+async function setAvisosKeyApp(key, val, sidOv = null, match = null) {
+  if (!sidOv || sidOv === sid()) await avisosEnsureSheet();
+  const rows = (await call('get_values', { range: `'AVISOS'!A1:B600`, sid: sidOv }, { read: true })).values || [];
+  const i = rows.findIndex(r => r[0] === key && (!match || match(r[1])));
+  const r = i >= 0 ? i + 1 : rows.length + 1;
+  await call('update_values', { range: `'AVISOS'!A${r}:B${r}`, values: [[key, val]], sid: sidOv });
 }
 
 function captainsCard() {
@@ -2209,10 +2237,142 @@ function playerGames(p, A) {
   }).join('')}</div>`;
 }
 
+// ===== AÑADIR EQUIPO: buscar en la federación y crear (o enlazar) su Excel =====
+let CAT = null;
+async function loadCatalog() {
+  if (CAT) return;
+  try { const r = await fetch(`data/ffcv/catalogo.json?t=${Date.now()}`, { cache: 'no-store' }); if (r.ok) CAT = await r.json(); } catch (e) {}
+  if (!CAT && UI.addT) UI.addT.msg = 'Todavía no está el catálogo de la federación. Se prepara solo en unos minutos; vuelve a intentarlo luego.';
+  render();
+}
+function catSearch(q) {
+  const k = noacc(up(q)).trim(); if (!CAT || k.length < 2) return [];
+  const out = [];
+  for (const c of CAT.comps) for (const g of c.groups) for (const t of g.teams) {
+    const hay = noacc(up(`${t[1]} ${c.n} ${c.cat} ${g.n}`));
+    if (k.split(/\s+/).every(w => hay.includes(w))) out.push({ c, g, t });
+  }
+  return out.slice(0, 60);
+}
+function addTeamView() {
+  const a = UI.addT;
+  const head = `<div class="card"><div class="row-between"><h3 class="h3">Añadir equipo</h3><button class="link" data-act="addTeamCancel">Cancelar</button></div>`;
+  if (!a.sel) {
+    const res = catSearch(a.q);
+    return `${head}<p class="muted small">Busca el equipo tal y como sale en la federación (nombre, categoría o competición). Por ejemplo: «Apolo regional».</p>
+      <input id="teamQ" value="${esc(a.q)}" placeholder="Buscar equipo…" autocomplete="off" autocapitalize="off">
+      ${a.msg ? `<p class="muted small">${esc(a.msg)}</p>` : ''}
+      ${!CAT ? '<p class="muted small">Cargando competiciones…</p>' : ''}
+      <div class="plist teamres">${res.map(({ c, g, t }) => `<button data-act="pickTeam" data-c="${c.c}" data-g="${g.g}" data-team="${esc(t[0])}"><span class="pi"><b>${esc(t[1])}</b><small>${esc(c.n)} · ${esc(g.n)}${c.juego && !/11/.test(c.juego) ? ' · ' + esc(c.juego) : ''}</small></span></button>`).join('')}
+      ${CAT && a.q.length >= 2 && !res.length ? '<p class="muted small">No encuentro ese equipo. Prueba con menos palabras.</p>' : ''}</div></div>`;
+  }
+  const t = a.sel;
+  return `${head}<div class="selteam"><b>${esc(t.name)}</b><small>${esc(t.comp)} · ${esc(t.grupo)} · temporada ${CAT ? esc(CAT.t) : ''}</small><button class="link small" data-act="addTeamUnpick">Cambiar</button></div>
+    <h4 class="h4">Excel del equipo</h4>
+    <div class="seg two"><button class="${a.mode === 'new' ? 'on' : ''}" data-act="addTeamMode" data-v="new">Crear uno nuevo</button><button class="${a.mode === 'link' ? 'on' : ''}" data-act="addTeamMode" data-v="link">Ya tengo uno</button></div>
+    ${a.mode === 'new' ? `<p class="muted small">Se crea un Google Sheet en tu Drive con el mismo formato que el del juvenil: una hoja por jornada con el rival, y la plantilla de la federación con nombres y dorsales.</p>`
+      : field('Enlace del Google Sheet', `<input id="addLink" value="${esc(a.link)}" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off">`)}
+    ${field('Duración de cada parte', `<select id="addHalf">${[25, 30, 35, 40, 45].map(n => `<option value="${n}" ${a.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
+    ${field('Capitanas', `<select id="addCap"><option value="jer" ${a.capMode === 'jer' ? 'selected' : ''}>Por jerarquía</option><option value="rot" ${a.capMode === 'rot' ? 'selected' : ''}>Rotatorio</option></select>`)}
+    <p class="muted small">La lista de capitanas se elige luego en Ajustes, cuando ya esté la plantilla.</p>
+    ${a.msg ? `<div class="banner ${a.err ? 'err' : ''}">${esc(a.msg)}</div>` : ''}
+    <button class="btn primary wide big" data-act="addTeamGo" ${a.busy ? 'disabled' : ''}>${a.busy ? 'Añadiendo…' : 'Añadir equipo'}</button></div>`;
+}
+async function addTeamGo() {
+  const a = UI.addT; if (!a || !a.sel || a.busy) return;
+  if (!ready()) return signIn('');
+  a.half = +($('#addHalf') || {}).value || a.half || 45; a.capMode = ($('#addCap') || {}).value || a.capMode;
+  if (a.mode === 'link') a.link = str(($('#addLink') || {}).value);
+  a.busy = true; a.err = false; a.msg = ''; render();
+  const cfg = a.sel;
+  try {
+    // 1) apuntar el equipo para que el proceso de GitHub prepare sus datos de la federación
+    const main = mainSid();
+    if (main) {
+      await setAvisosKeyApp('equipo', JSON.stringify(cfg), main, v => { try { return JSON.parse(v).team === cfg.team; } catch (e) { return false; } });
+      await setAvisosKeyApp('ffcv_sync:' + cfg.team, new Date().toISOString(), main);
+    }
+    // 2) el Excel
+    let newId, title0;
+    if (a.mode === 'link') {
+      const m = a.link.match(/\/d\/([a-zA-Z0-9_-]+)/); newId = m ? m[1] : (/^[a-zA-Z0-9_-]{20,}$/.test(a.link) ? a.link : '');
+      if (!newId) throw { message: 'Eso no parece un enlace de Google Sheets.' };
+      const p = await call('get_spreadsheet', { sid: newId }, { read: true }); title0 = p.properties.title;
+    } else {
+      title0 = `${cfg.name.replace(/'/g, '')} · ${cfg.comp} · ${cfg.grupo}`.replace(/\s+/g, ' ');
+      const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets', { method: 'POST', headers: { Authorization: 'Bearer ' + AUTH.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ properties: { title: title0, locale: 'es_ES', timeZone: 'Europe/Madrid' } }) });
+      if (!r.ok) throw { message: 'Google no ha dejado crear el Excel (' + r.status + ').' };
+      newId = (await r.json()).spreadsheetId;
+    }
+    const tpl = templateRef();
+    const done = () => { UI.addT = null; };
+    guardSwitch(() => { done(); activateProfile(newId, { settings: { sid: newId, sheetTitle: title0, legacy: false, ffcv: cfg, half: a.half, capMode: a.capMode, captains: [], build: a.mode === 'new' ? tpl : null } }); });
+    a.busy = false;
+  } catch (e) { a.busy = false; a.err = true; a.msg = e.message || errText(e); render(); }
+}
+// Hoja modelo para los Excel nuevos: la última jornada del Excel principal (sin datos)
+function templateRef() {
+  const main = mainSid(); if (!main) return null;
+  const sheets = isLegacy() ? S.sheets : ((S.profiles[main] || {}).sheets || []);
+  const last = sheets[sheets.length - 1]; return last ? { sid: main, sheetId: last.id, title: last.title } : null;
+}
+const shortRival = n => up(str(n).replace(/'[^']*'/g, '').replace(/^((?:[A-Z]{1,4}\.)+\s*)+/i, '').replace(/\s+/g, ' ').replace(/`/g, "'").trim()).slice(0, 26);
+// Crea las hojas de jornada del Excel nuevo cuando ya están los datos de la federación
+async function buildTeamExcel(manual = false) {
+  const b = S.settings.build; if (!b || UI.building) return;
+  if (!FFCV_SNAP || !FFCV_SNAP.cal || !FFCV_SNAP.cal.length) { await loadFfcv(); }
+  if (!FFCV_SNAP || !FFCV_SNAP.cal || !FFCV_SNAP.cal.length) { UI.buildMsg = 'Esperando los datos de la federación de este equipo. Se preparan solos en unos minutos (puedes cerrar la app).'; if (manual) showToast('Todavía no están. Prueba en unos minutos.'); render(); return; }
+  if (!b.sid) { UI.buildMsg = 'No encuentro el Excel del juvenil para copiar el formato.'; render(); return; }
+  UI.building = true; UI.buildMsg = 'Creando las hojas del Excel…'; render();
+  try {
+    const me = sid(); const cfg = ffcvCfg();
+    const cal = FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((x, y) => x[0] - y[0]);
+    const team = FFCV_SNAP.teams.find(t => t.cod === cfg.team);
+    const players = (team ? team.pl : []).map(p => ({ name: up(nameFmt(p[0])), d: str(p[1]) })).sort((x, y) => (+x.d || 999) - (+y.d || 999));
+    // copiar la hoja modelo al Excel nuevo
+    const cp = await gfetch(`${b.sid}/sheets/${b.sheetId}:copyTo`, { method: 'POST', body: JSON.stringify({ destinationSpreadsheetId: me }) });
+    const tplId = cp.sheetId, tplTitle = cp.title;
+    let rows = (await call('get_values', { range: `${qs(tplTitle)}!A1:M140` }, { read: true })).values || [];
+    let L = parseLayout(rows);
+    const have = L.total - (L.hdr + 1), need = Math.max(players.length, 14);
+    const req = [];
+    if (need > have) req.push({ insertDimension: { range: { sheetId: tplId, dimension: 'ROWS', startIndex: L.total - 1, endIndex: L.total - 1 + need - have }, inheritFromBefore: true } });
+    if (need < have) req.push({ deleteDimension: { range: { sheetId: tplId, dimension: 'ROWS', startIndex: L.hdr + 1 + need, endIndex: L.total } } });
+    if (req.length) await call('update_spreadsheet', { requests: req });
+    rows = (await call('get_values', { range: `${qs(tplTitle)}!A1:M140` }, { read: true })).values || []; L = parseLayout(rows);
+    // plantilla vacía con las jugadoras de la federación
+    const block = Array.from({ length: L.total - (L.hdr + 1) }, (_, i) => { const p = players[i]; return [p ? p.name : '', p ? (+p.d || p.d) : '', false, false, '', '', '', '', false, '', '', '', false]; });
+    await call('update_values', { range: `${qs(tplTitle)}!A${L.hdr + 2}:M${L.total}`, values: block });
+    // nombre del rival en el bloque de sistemas y sistema propio vacío
+    const tplRival = str((rows[4] || [])[0]);
+    const rivRow = rows.findIndex((r, i) => i > L.total && str(r[7]) === tplRival && tplRival);
+    const ourSys = rows.findIndex((r, i) => i > L.total && /^\d/.test(str(r[7])));
+    if (ourSys >= 0) await call('update_values', { range: `${qs(tplTitle)}!H${ourSys + 1}`, values: [['']] });
+    // una hoja por jornada
+    const dup = cal.map((f, i) => ({ duplicateSheet: { sourceSheetId: tplId, insertSheetIndex: i, newSheetName: `${i + 1} - ${shortRival(isOurs(f[3]) ? f[4] : f[3])}` } }));
+    const res = await call('update_spreadsheet', { requests: dup });
+    const newSheets = (res.replies || []).map(r => r.duplicateSheet && r.duplicateSheet.properties).filter(Boolean);
+    const data = [];
+    newSheets.forEach((p, i) => {
+      const f = cal[i]; const rival = up(isOurs(f[3]) ? f[4] : f[3]);
+      data.push({ range: `${qs(p.title)}!A2`, values: [[`LIGA - JORNADA ${i + 1}`]] }, { range: `${qs(p.title)}!A5`, values: [[rival]] }, { range: `${qs(p.title)}!A${L.hdr}`, values: [[up(cfg.name.replace(/'[^']*'/g, '')).trim()]] });
+      if (rivRow >= 0) data.push({ range: `${qs(p.title)}!H${rivRow + 1}`, values: [[rival]] });
+    });
+    for (let i = 0; i < data.length; i += 80) await gfetch(`${me}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: data.slice(i, i + 80) }) });
+    // fuera la hoja modelo y la hoja en blanco del Excel nuevo
+    const meta = await call('get_spreadsheet', {}, { read: true });
+    const extra = meta.sheets.map(x => x.properties).filter(x => x.sheetId === tplId || !/^\s*\d+\s*-/.test(x.title));
+    if (extra.length) await call('update_spreadsheet', { requests: extra.map(x => ({ deleteSheet: { sheetId: x.sheetId } })) });
+    S.settings.build = null; UI.buildMsg = ''; S.current = null; persist();
+    showToast(`Excel creado: ${newSheets.length} jornadas y ${players.length} jugadoras de la federación.`);
+    UI.building = false; initAuth();
+  } catch (e) { UI.building = false; UI.buildMsg = 'No se pudo crear el Excel: ' + (e.message || errText(e)); render(); }
+}
+
 // ===== VARIOS EXCEL (un equipo por Google Sheet) =====
 // El equipo activo vive en S; los demás se guardan aparte en S.profiles[id] con sus jornadas, estadísticas y ajustes.
 const PROFILE_KEYS = ['sheets', 'current', 'matches', 'extrasPool', 'stats'];
-const PROFILE_SETTINGS = ['sid', 'sheetTitle', 'captains', 'capMode', 'half', 'legacy'];
+const PROFILE_SETTINGS = ['sid', 'sheetTitle', 'captains', 'capMode', 'half', 'legacy', 'ffcv', 'build'];
 const isLegacy = () => S.settings.legacy !== false; // el primer Excel (juvenil): calendario FFCV, avisos, capitanas por defecto
 function profileSnapshot() { const o = { settings: {} }; for (const k of PROFILE_KEYS) o[k] = S[k]; for (const k of PROFILE_SETTINGS) if (S.settings[k] !== undefined) o.settings[k] = S.settings[k]; return o; }
 function teamsList() {
@@ -2529,7 +2689,13 @@ const ACT = {
     guardSwitch(() => activateProfile(newId, { settings: { sid: newId, sheetTitle: title0, legacy: false } }));
   },
   teamPick(el) { const id = el.value; if (!id || id === sid()) return; guardSwitch(() => activateProfile(id)); },
-  addTeam() { UI.editSid = true; UI.err.sid = null; render(); },
+  addTeam() { UI.addT = { q: '', sel: null, mode: 'new', link: '', busy: false, msg: '' }; loadCatalog(); render(); window.scrollTo(0, 0); },
+  addTeamCancel() { UI.addT = null; render(); },
+  pickTeam(el) { const a = UI.addT; const c = CAT && CAT.comps.find(x => x.c === el.dataset.c); const g = c && c.groups.find(x => x.g === el.dataset.g); const t = g && g.teams.find(x => x[0] === el.dataset.team); if (!t) return; a.sel = { t: CAT.t, c: c.c, g: g.g, team: t[0], name: t[1], comp: c.n, grupo: g.n }; a.half = c.min && c.partes ? Math.round(c.min / c.partes) : 45; a.capMode = 'jer'; render(); },
+  addTeamMode(el) { UI.addT.mode = el.dataset.v; render(); },
+  addTeamUnpick() { UI.addT.sel = null; render(); },
+  addTeamGo() { addTeamGo(); },
+  buildCheck() { buildTeamExcel(true); },
   askRemoveTeam() { openSheet({ type: 'confirm', title: 'Quitar este equipo de la app', text: `Se quita «${esc(S.settings.sheetTitle || 'este Excel')}» de la app y lo que tengas apuntado sin guardar en el móvil. El Google Sheet no se toca: puedes volver a añadirlo cuando quieras.`, ok: 'Quitar', act: 'doRemoveTeam' }); },
   doRemoveTeam() { closeSheet(); const other = Object.keys(S.profiles || {})[0]; if (!other) return; const gone = sid(); activateProfile(other, null, true); delete S.profiles[gone]; persist(); render(); },
   async unsavedSave() {
@@ -2607,7 +2773,7 @@ const ACT = {
   async ffcvSync() {
     if (!ready()) return signIn('');
     UI.ffcvAsked = true; render();
-    try { await setAvisosKeyApp('ffcv_sync', new Date().toISOString()); showToast('Pedido. En unos 10 minutos estarán los datos nuevos de la federación; vuelve a abrir la app para verlos.'); }
+    try { await setAvisosKeyApp(isLegacy() ? 'ffcv_sync' : 'ffcv_sync:' + ourCod(), new Date().toISOString(), mainSid()); showToast('Pedido. En unos 10 minutos estarán los datos nuevos de la federación; vuelve a abrir la app para verlos.'); }
     catch (e) { UI.ffcvAsked = false; showToast('No se pudo pedir: ' + errText(e)); }
   },
   rpTag(el) { const m = cur(); const p = m.rival.players[+el.dataset.i]; p.tag = p.tag ? '' : 'Goleadora'; p.fed = false; touch(m); },
@@ -2759,6 +2925,7 @@ document.addEventListener('change', ev => {
   avisosSaveCfg();
 });
 document.addEventListener('input', ev => {
+  if (ev.target.id === 'teamQ' && UI.addT) { UI.addT.q = ev.target.value; const pos = ev.target.selectionStart; render(); const el = $('#teamQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } return; }
   const el = ev.target;
   if (el.dataset.bind) {
     let v = el.value; const path = el.dataset.bind;
