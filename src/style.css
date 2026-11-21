@@ -448,20 +448,17 @@ nav.bottom button.on .ic { color: var(--accent); }
 .selteam { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--good) 10%, transparent); margin-bottom: 12px; }
 .selteam small { color: var(--muted); }
 .selteam .link { align-self: flex-start; }
-/* Pantalla de carga: balón girando, disparo a la escuadra del logo y fundido */
-#splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  background: radial-gradient(120% 80% at 50% 35%, #2f7a4a 0%, #1d5233 55%, #133a24 100%); color: #eaf3ec; transition: opacity .45s ease; }
+/* Pantalla de carga: solo el balón girando; al terminar, botecito y fundido */
+#splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  background: radial-gradient(120% 80% at 50% 40%, #2f7a4a 0%, #1d5233 55%, #133a24 100%); color: #eaf3ec; transition: opacity .4s ease; }
 #splash.out { opacity: 0; pointer-events: none; }
-#splash .sp-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 34px; }
-#splash .sp-logo { position: relative; width: 132px; height: 132px; border-radius: 30px; box-shadow: 0 14px 34px rgba(0,0,0,.35); }
-#splash .sp-logo img { width: 100%; height: 100%; border-radius: 30px; display: block; }
-#splash .sp-target { position: absolute; right: 10px; top: 10px; width: 1px; height: 1px; }
-#splash .sp-logo.hit { animation: sp-net .45s ease-out; }
-#splash .sp-ball { width: 54px; height: 54px; animation: sp-bounce .9s ease-in-out infinite; will-change: transform; }
-#splash .sp-ball svg { width: 100%; height: 100%; animation: sp-spin .85s linear infinite; filter: drop-shadow(0 6px 6px rgba(0,0,0,.35)); }
-#splash .sp-ball.shot { animation: none; }
+#splash .sp-ball { width: 64px; height: 64px; animation: sp-bounce .9s ease-in-out infinite; will-change: transform; }
+#splash .sp-ball svg { width: 100%; height: 100%; animation: sp-spin .85s linear infinite; filter: drop-shadow(0 8px 8px rgba(0,0,0,.35)); }
 #splash .sp-msg { font-size: 14px; font-weight: 600; letter-spacing: .02em; opacity: .85; min-height: 1.2em; margin: 0; }
 @keyframes sp-spin { to { transform: rotate(360deg); } }
 @keyframes sp-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
-@keyframes sp-net { 0% { transform: scale(1); } 35% { transform: scale(1.07) rotate(-2deg); } 70% { transform: scale(.98); } 100% { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { #splash .sp-ball, #splash .sp-ball svg { animation: none; } }
+/* Balón pequeño de «cargando» para el resto de la app */
+.ballspin { display: inline-block; width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+.ballspin svg { width: 100%; height: 100%; animation: sp-spin .8s linear infinite; display: block; }
+.ballspin.lg { width: 28px; height: 28px; }
+@media (prefers-reduced-motion: reduce) { #splash .sp-ball, #splash .sp-ball svg, .ballspin svg { animation: none; } }

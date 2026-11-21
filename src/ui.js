@@ -697,7 +697,7 @@ function topbar(m) {
   const opp = m ? title(sheetShort(m.title).name) : '—';
   let chip;
   if (mcpState === 'none') chip = `<button class="sync dirty" data-act="signin">Entrar con Google</button>`;
-  else if (UI.sync === 'saving') chip = `<span class="sync busy"><i class="spin"></i>${esc(UI.syncMsg)}</span>`;
+  else if (UI.sync === 'saving') chip = `<span class="sync busy">${ballSpin()}${esc(UI.syncMsg)}</span>`;
   else if (m && m.dirty) chip = `<button class="sync dirty" data-act="save">Guardar en Excel</button>`;
   else if (m && m.savedAt) chip = `<span class="sync ok">Guardado ${timeAgo(m.savedAt)}</span>`;
   else chip = `<span class="sync ok">Al día con el Excel</span>`;
@@ -736,10 +736,10 @@ function pickStartJornada() {
   return false;
 }
 function matchView(m) {
-  if (S.settings.build) return `<section class="pad"><div class="card"><h3 class="h3">Preparando el Excel de ${esc((ffcvCfg() || {}).name || 'este equipo')}</h3><p>${esc(UI.buildMsg || 'Un momento…')}</p>${UI.building ? '' : '<button class="btn" data-act="buildCheck">Comprobar ahora</button>'}</div></section>`;
+  if (S.settings.build) return `<section class="pad"><div class="card"><h3 class="h3">Preparando el Excel de ${esc((ffcvCfg() || {}).name || 'este equipo')}</h3><p>${UI.building ? ballSpin() + ' ' : ''}${esc(UI.buildMsg || 'Un momento…')}</p>${UI.building ? '' : '<button class="btn" data-act="buildCheck">Comprobar ahora</button>'}</div></section>`;
   if (!m) return jornadaRail() + `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
   if (m.finalized) {
-    const loading0 = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
+    const loading0 = UI.loading[m.sheetId] ? `<div class="banner">${ballSpin()} Leyendo ${esc(m.title)} del Excel…</div>` : '';
     return jornadaRail() + loading0 + `<section class="pad">${summaryView(m)}</section>`;
   }
   const step = S.ui.step;
@@ -748,7 +748,7 @@ function matchView(m) {
   const arrow = (dir, d) => `<button class="stepnav" data-act="stepGo" data-v="${dir}" ${(dir < 0 ? si === 0 : si === STEPS.length - 1) ? 'disabled' : ''} aria-label="${dir < 0 ? 'Paso anterior' : 'Paso siguiente'}"><svg viewBox="0 0 24 24" class="ic"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
   const tabs = `<div class="stepwrap"><div class="stepbar">${arrow(-1, 'M15 5l-7 7 7 7')}<button class="stephead" data-act="stepsToggle" aria-expanded="${!!S.ui.stepsOpen}"><i>${si + 1}</i><b>${STEPS[si][1]}</b><span class="sp"></span><span class="rl">${S.ui.stepsOpen ? 'Ocultar' : 'Pasos'}</span>${chevS}</button>${arrow(1, 'M9 5l7 7-7 7')}</div>
     ${S.ui.stepsOpen ? `<div class="steps">${STEPS.map(([k, l], i) => `<button class="${step === k ? 'on' : ''}" data-act="step" data-v="${k}"><i>${i + 1}</i>${l}</button>`).join('')}</div>` : ''}</div>`;
-  const loading = UI.loading[m.sheetId] ? `<div class="banner">Leyendo ${esc(m.title)} del Excel…</div>` : '';
+  const loading = UI.loading[m.sheetId] ? `<div class="banner">${ballSpin()} Leyendo ${esc(m.title)} del Excel…</div>` : '';
   const err = UI.err.match ? `<div class="banner err">${esc(UI.err.match)} <button class="link" data-act="reloadJ">Reintentar</button></div>` : '';
   const views = { previa: previaView, convocatoria: convView, once: onceView, rival: rivalView, directo: liveView, cierre: cierreView };
   return (step === 'directo' ? '' : jornadaRail()) + tabs + loading + err + `<section class="pad">${views[step](m)}</section>`;
@@ -1080,7 +1080,7 @@ function statsView() {
   const sums = S.sheets.map(s => S.stats.sums[s.id]).filter(Boolean);
   const A = aggregate(sums);
   const tabs = `<div class="seg">${[['equipo', 'Equipo'], ['jugadoras', 'Jugadoras'], ['scout', 'Rival'], ['rivales', 'Notas']].map(([k, l]) => `<button class="${S.ui.stab === k ? 'on' : ''}" data-act="stab" data-v="${k}">${l}</button>`).join('')}</div>`;
-  const prog = UI.statsProgress ? `<div class="banner">Leyendo jornadas del Excel… ${UI.statsProgress.done}/${UI.statsProgress.total}</div>` : '';
+  const prog = UI.statsProgress ? `<div class="banner">${ballSpin()} Leyendo jornadas del Excel… ${UI.statsProgress.done}/${UI.statsProgress.total}</div>` : '';
   const head = `<div class="sumline"><span class="muted small">${S.stats.at ? `Datos del Excel · ${timeAgo(S.stats.at)}` : `${sums.length} de ${S.sheets.length} jornadas leídas`}</span><span class="sp"></span><button class="btn ghost sm" data-act="statsReload" ${!ready() || UI.statsProgress ? 'disabled' : ''}>Actualizar</button></div>`;
   const err = UI.err.stats ? `<div class="banner err">${esc(UI.err.stats)}</div>` : '';
   if (S.ui.stab === 'scout') return `<section class="pad">${tabs}${scoutView()}</section>`;
@@ -1380,7 +1380,7 @@ function addTeamView() {
     ${field('Capitanas', `<select id="addCap"><option value="jer" ${a.capMode === 'jer' ? 'selected' : ''}>Por jerarquía</option><option value="rot" ${a.capMode === 'rot' ? 'selected' : ''}>Rotatorio</option></select>`)}
     <p class="muted small">La lista de capitanas se elige luego en Ajustes, cuando ya esté la plantilla.</p>
     ${a.msg ? `<div class="banner ${a.err ? 'err' : ''}">${esc(a.msg)}</div>` : ''}
-    <button class="btn primary wide big" data-act="addTeamGo" ${a.busy ? 'disabled' : ''}>${a.busy ? 'Añadiendo…' : 'Añadir equipo'}</button></div>`;
+    <button class="btn primary wide big" data-act="addTeamGo" ${a.busy ? 'disabled' : ''}>${a.busy ? ballSpin() + ' Añadiendo…' : 'Añadir equipo'}</button></div>`;
 }
 async function addTeamGo() {
   const a = UI.addT; if (!a || !a.sel || a.busy) return;
@@ -2068,28 +2068,19 @@ setInterval(() => {
 }, 5000);
 
 // ===== PANTALLA DE CARGA =====
+// Balón de «cargando» (el mismo de la pantalla de inicio, en pequeño)
+const BALL_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="bgX" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#eef1ea"/><stop offset="1" stop-color="#b9c2bb"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#bgX)" stroke="#142019" stroke-width="3"/><path d="M50 30 l17 12 -6.5 20 h-21 L33 42z" fill="#142019"/><path d="M50 30V12M67 42l17-6M60.5 62l10 15M39.5 62l-10 15M33 42l-17-6" stroke="#142019" stroke-width="3" fill="none"/><path d="M41 6l9 6 9-6M88 30l-4 6 6 9M80 82l-9-5 -3 11M20 82l9-5 3 11M12 30l4 6 -6 9" fill="#142019" stroke="#142019" stroke-width="2" stroke-linejoin="round"/></svg>`;
+const ballSpin = (cls = '') => `<span class="ballspin ${cls}" aria-hidden="true">${BALL_SVG}</span>`;
 // Mientras gira el balón se lee todo del Excel y de la federación; al terminar, disparo a la escuadra del logo y fundido.
 const splashMsg = t => { const e = document.querySelector('#splash .sp-msg'); if (e) e.textContent = t; };
 async function splashRun(work) {
   const t0 = Date.now();
   await Promise.race([Promise.resolve(work).catch(() => {}), new Promise(r => setTimeout(r, 9000))]);
-  const wait = 1300 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  const wait = 700 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));
   const sp = $('#splash'); if (!sp) return;
-  const ball = sp.querySelector('.sp-ball'), tgt = sp.querySelector('.sp-target'), logo = sp.querySelector('.sp-logo');
+  const ball = sp.querySelector('.sp-ball');
   splashMsg('');
-  try {
-    const b = ball.getBoundingClientRect(), t = tgt.getBoundingClientRect();
-    const dx = t.left - (b.left + b.width / 2), dy = t.top - (b.top + b.height / 2);
-    ball.classList.add('shot');
-    const a = ball.animate([
-      { transform: 'translate(0,0) scale(1) rotate(0deg)' },
-      { transform: `translate(${dx * 0.12}px, 18px) scale(1.08) rotate(-40deg)`, offset: 0.18 },
-      { transform: `translate(${dx * 0.6}px, ${dy * 0.75 - 70}px) scale(.72) rotate(420deg)`, offset: 0.62 },
-      { transform: `translate(${dx}px, ${dy}px) scale(.36) rotate(760deg)` }], { duration: 760, easing: 'cubic-bezier(.3,.1,.3,1)', fill: 'forwards' });
-    await a.finished;
-    logo.classList.add('hit');
-    await new Promise(r => setTimeout(r, 380));
-  } catch (e) {}
+  try { ball.style.animation = 'none'; await ball.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-26px) scale(1.06)', offset: .45 }, { transform: 'translateY(0) scale(.9)' }], { duration: 420, easing: 'ease-out' }).finished; } catch (e) {}
   sp.classList.add('out');
   setTimeout(() => sp.remove(), 500);
 }
