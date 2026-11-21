@@ -470,7 +470,7 @@ nav.bottom button.on .ic { color: var(--accent); }
 .selteam .link { align-self: flex-start; }
 /* Pantalla de carga: solo el balón girando; al terminar, botecito y fundido */
 #splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
-  background: radial-gradient(120% 80% at 50% 40%, #2f7a4a 0%, #1d5233 55%, #133a24 100%); color: #eaf3ec; transition: opacity .4s ease; }
+  background: #22603b; color: #eaf3ec; transition: opacity .35s ease-out; } /* color liso: con degradado los bordes (más oscuros) parecían tardar más en irse */
 #splash.out { opacity: 0; pointer-events: none; }
 #splash .sp-ball { width: 64px; height: 64px; animation: sp-bounce .9s ease-in-out infinite; will-change: transform; }
 #splash .sp-ball svg { width: 100%; height: 100%; animation: sp-spin .85s linear infinite; filter: drop-shadow(0 8px 8px rgba(0,0,0,.35)); }
