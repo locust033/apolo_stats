@@ -38,7 +38,7 @@ async function main() {
   if (!subs.length || !cfg.vapid_public || !cfg.vapid_private) { console.log('Sin móviles suscritos.'); return; }
   webpush.setVapidDetails('mailto:avisos@apolo.app', cfg.vapid_public, cfg.vapid_private);
 
-  const jornadas = sheets.filter(s => /^\s*\d+\s*-/.test(s.title)).sort((a, b) => parseInt(a.title) - parseInt(b.title));
+  const jornadas = sheets.filter(s => /^\s*\d+\s*-/.test(s.title) && !/^\s*\d+\s*-\s*DESCANSO\s*$/i.test(s.title)).sort((a, b) => parseInt(a.title) - parseInt(b.title));
   const ranges = jornadas.flatMap(s => [`${q(s.title)}!D8:D10`, `${q(s.title)}!K11`]);
   const bg = await api(`/values:batchGet?${ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&')}`);
   const J = jornadas.map((s, i) => {

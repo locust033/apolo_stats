@@ -150,7 +150,7 @@ function parseFfcvRows(rows) {
   for (const r of rows || []) {
     const k = r[0], v = r.slice(1);
     if (k === 'at') s.at = v[0];
-    else if (k === 'C') s.clas.push([+v[0], str(v[1]), str(v[2]), +v[3], +v[4], +v[5], +v[6], +v[7], +v[8], +v[9], str(v[10])]);
+    else if (k === 'C') s.clas.push([+v[0], str(v[1]), str(v[2]), +v[3], +v[4], +v[5], +v[6], +v[7], +v[8], +v[9], str(v[10]), str(v[11])]);
     else if (k === 'M') s.matches.push([+v[0], str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), str(v[6])]);
     else if (k === 'K') s.cal.push([+v[0], str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), str(v[6])]);
     else if (k === 'S') s.sanc.push([str(v[0]), str(v[1]), str(v[2]), str(v[3]), str(v[4]), str(v[5]), +v[6] || 0]);
@@ -266,7 +266,7 @@ async function refreshSheets() {
     const all = (p && p.sheets || []).map(s => ({ id: s.properties.sheetId, title: s.properties.title }));
     const tabs = all.map(x => x.title);
     S.settings.hasAvisos = tabs.includes('AVISOS'); S.settings.hasFfcvTab = tabs.includes('FFCV'); S.settings.hasApp = tabs.includes('APP');
-    const list = all.filter(s => /^\s*\d+\s*-/.test(s.title));
+    const list = all.filter(s => /^\s*\d+\s*-/.test(s.title) && !isRestTitle(s.title));
     if (list.length) { S.sheets = list; }
     // si una hoja cambia de nombre (p. ej. al renumerar jornadas), lo guardado en el móvil la sigue
     for (const x of list) {
@@ -280,6 +280,8 @@ async function refreshSheets() {
   render();
 }
 
+// Hojas «N - DESCANSO»: solo marcan en el Excel la jornada en la que no jugamos
+const isRestTitle = t => /^\s*\d+\s*-\s*DESCANSO\s*$/i.test(t);
 // Citación: siempre 1 h 15 min antes de la hora del partido
 const citOf = hora => { const m = str(hora).match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; let t = (+m[1]) * 60 + (+m[2]) - 75; if (t < 0) t += 1440; return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -702,6 +704,9 @@ const IC = {
   match: '<svg viewBox="0 0 24 24" class="ic"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 4v16M3 9h3v6H3M21 9h-3v6h3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   stats: '<svg viewBox="0 0 24 24" class="ic"><path d="M5 20V11M12 20V5M19 20v-7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
   gear: '<svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  cal: '<svg viewBox="0 0 24 24" class="ic"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><rect x="7" y="13" width="3" height="3" rx=".6" fill="currentColor"/></svg>',
+  home: '<svg viewBox="0 0 24 24" class="ic"><path d="M3.5 11.2L12 4l8.5 7.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.8V20h4.5v-5.5h3V20H18V9.8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/></svg>',
+  plane: '<svg viewBox="0 0 24 24" class="ic"><path d="M21.5 4.1c-.7-.7-1.9-.6-2.6.1l-3.6 3.6L6.6 5.3 4.7 7.2l7 3.9-3.4 3.4-2.9-.4-1.5 1.5 3.4 1.6 1.6 3.4 1.5-1.5-.4-2.9 3.4-3.4 3.9 7 1.9-1.9-2.5-8.7 3.6-3.6c.7-.7.8-1.9.1-2.6z" fill="currentColor"/></svg>',
   star: '<svg viewBox="0 0 24 24" class="ic"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor"/></svg>',
 };
 
@@ -714,8 +719,8 @@ function render() {
   const y = window.scrollY;
   const m = cur();
   // el «APOLO vs RIVAL» solo en la pestaña Partido; en las demás, solo el nombre de la pestaña
-  const head = S.ui.tab === 'match' ? topbar(m) : `<header class="top"><div class="matchup"><span class="us">${S.ui.tab === 'stats' ? 'Estadísticas' : 'Ajustes'}</span></div></header>`;
-  app.innerHTML = head + `<main id="main">${S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : settingsView()}</main>` + navbar();
+  const head = S.ui.tab === 'match' ? topbar(m) : `<header class="top"><div class="matchup"><span class="us">${{ stats: 'Estadísticas', settings: 'Ajustes', cal: 'Calendario' }[S.ui.tab] || ''}</span></div>${calBtn()}</header>`;
+  app.innerHTML = head + `<main id="main">${S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : S.ui.tab === 'cal' ? calView() : settingsView()}</main>` + navbar();
   window.scrollTo(0, y);
   // en las filas deslizables de botones, el elegido queda en el centro (al repintar se perdía la posición)
   for (const row of app.querySelectorAll('.chips.scroll')) {
@@ -732,13 +737,66 @@ function topbar(m) {
   else if (m && m.dirty) chip = `<button class="sync dirty" data-act="save">Guardar en Excel</button>`;
   else if (m && m.savedAt) chip = `<span class="sync ok">Guardado ${timeAgo(m.savedAt)}</span>`;
   else chip = `<span class="sync ok">Al día con el Excel</span>`;
-  return `<header class="top"><div class="matchup"><span class="us">${esc(title(m ? m.team : '').replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span><span class="vs">vs</span><span class="them">${esc(opp)}</span></div>${chip}</header>`
+  return `<header class="top"><div class="matchup"><span class="us">${esc(title(m ? m.team : '').replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span><span class="vs">vs</span><span class="them">${esc(opp)}</span></div>${chip}${calBtn()}</header>`
     + (UI.sync === 'error' ? `<div class="banner err" role="alert">${esc(UI.syncMsg)} <button class="link" data-act="save">Reintentar</button></div>` : '')
     + (UI.err.auth ? `<div class="banner err">${esc(UI.err.auth)}</div>` : '')
     + (UI.err.ffcv ? `<div class="banner err">${esc(UI.err.ffcv)}</div>` : '')
     + (mcpState === 'none' && !(m && m.roster.length) ? `<div class="banner">Entra con tu cuenta de Google para cargar las jornadas de tu Excel. Durante el partido no hace falta conexión: lo apuntado se queda en el móvil hasta que guardes.</div>` : '');
 }
 function timeAgo(t) { const s = Math.round((Date.now() - t) / 1000); if (s < 60) return 'ahora'; if (s < 3600) return `hace ${Math.round(s / 60)} min`; const d = new Date(t); return `el ${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+// ===== CALENDARIO (propio de la app, con el calendario de la federación) =====
+const calBtn = () => `<button class="calbtn ${S.ui.tab === 'cal' ? 'on' : ''}" data-act="calToggle" aria-label="Calendario">${IC.cal}</button>`;
+const ymKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+// Escudo de un equipo (descargado de la federación) o sus iniciales si no hay
+function crestHtml(name, cls = '') {
+  const c = FFCV_SNAP && FFCV_SNAP.clas ? teamByName(name) : null; const src = c && c[11] ? `data/${c[11]}` : '';
+  const stop = new Set(['SD', 'CF', 'UE', 'CD', 'UD', 'FC', 'CE', 'CFB', 'CLUB', 'DE', 'DEL', 'LA', 'EL', 'PD']);
+  const ini = noacc(up(name)).replace(/'[AB]'/g, ' ').replace(/\b[A-Z]\.(?=[A-Z]\.)/g, '').replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !stop.has(w)).slice(0, 2).map(w => w[0]).join('') || '?';
+  return `<span class="crest ${cls}"><b>${esc(ini)}</b>${src ? `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
+}
+function calItems() {
+  if (!FFCV_SNAP || !FFCV_SNAP.cal) return [];
+  return FFCV_SNAP.cal.map(x => {
+    const rest = /descansa/i.test(x[3] + ' ' + x[4]); const home = isOurs(x[3]);
+    const sh = rest ? null : S.sheets.find(s => sheetShort(s.title).n === x[0]);
+    const sum = sh && S.stats.sums[sh.id];
+    return { n: x[0], d: dmy(x[1]), hora: x[2], rest, home, rival: home ? x[4] : x[3], campo: x[5], sh, final: sum && sum.final };
+  }).filter(x => x.d).sort((a, b) => a.d - b.d);
+}
+function calStartMonth() {
+  const it = calItems(); const t = ymKey(new Date()); if (!it.length) return t;
+  const lo = ymKey(it[0].d), hi = ymKey(it[it.length - 1].d);
+  return t < lo ? lo : t > hi ? hi : t;
+}
+function calView() {
+  const it = calItems();
+  if (!it.length) return `<section class="pad"><div class="card"><h3 class="h3">Sin calendario</h3><p class="muted">El calendario sale de la federación. Conecta el Excel de tu equipo en Ajustes y espera a que se descarguen sus datos.</p></div></section>`;
+  const [y, mo] = (S.ui.calMonth || calStartMonth()).split('-').map(Number);
+  const first = new Date(y, mo - 1, 1), days = new Date(y, mo, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const inMonth = it.filter(x => x.d.getFullYear() === y && x.d.getMonth() === mo - 1);
+  const byDay = {}; for (const x of inMonth) byDay[x.d.getDate()] = x;
+  const minM = ymKey(it[0].d), maxM = ymKey(it[it.length - 1].d), curM = ymKey(first);
+  const rc = x => !x.final ? '' : x.final[0] > x.final[1] ? 'w' : x.final[0] === x.final[1] ? 'd' : 'l';
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<div class="cday out"></div>');
+  for (let d = 1; d <= days; d++) {
+    const x = byDay[d]; const dt = new Date(y, mo - 1, d); const wk = dt.getDay() === 0 || dt.getDay() === 6;
+    const cls = `cday ${wk ? 'wk' : ''} ${+dt === +t ? 'today' : ''} ${x ? (x.rest ? 'rest' : 'game ' + rc(x)) : ''}`;
+    const inner = `<small>${d}</small>${x ? (x.rest ? '<em>Desc.</em>' : `${crestHtml(x.rival)}<i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>`) : ''}`;
+    cells.push(x && x.sh ? `<button class="${cls}" data-act="openJ" data-go="1" data-id="${x.sh.id}" aria-label="Jornada ${x.n}: ${esc(title(x.rival))}">${inner}</button>` : `<div class="${cls}">${inner}</div>`);
+  }
+  const wd = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((l, i) => `<span class="${i > 4 ? 'wk' : ''}">${l}</span>`).join('');
+  const dayName = d => ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][d.getDay()];
+  const list = inMonth.map(x => x.rest
+    ? `<div class="cgame rest"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}</span><span class="crest none"><b>—</b></span><span class="cname">Descanso</span></div>`
+    : `<${x.sh ? `button data-act="openJ" data-go="1" data-id="${x.sh.id}"` : 'div'} class="cgame ${rc(x)}"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}${x.hora ? `<br><small>${esc(x.hora)}</small>` : ''}</span>${crestHtml(x.rival)}<span class="cname">${esc(title(x.rival))}<small><i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>${x.home ? 'En casa' : 'Fuera'}</small></span>${x.final ? `<b class="cres">${x.final.join('-')}</b>` : ''}</${x.sh ? 'button' : 'div'}>`).join('');
+  return `<section class="pad"><div class="card calcard">
+    <div class="calhead"><button class="btn icon" data-act="calMove" data-v="-1" ${curM <= minM ? 'disabled' : ''} aria-label="Mes anterior">‹</button><h3 class="h3">${MESES[mo - 1]} <span class="muted">${y}</span></h3><button class="btn icon" data-act="calMove" data-v="1" ${curM >= maxM ? 'disabled' : ''} aria-label="Mes siguiente">›</button></div>
+    <div class="cweek">${wd}</div><div class="cgrid">${cells.join('')}</div>
+    <p class="calkey muted small"><i class="ha h">${IC.home}</i>En casa <i class="ha a">${IC.plane}</i>Fuera</p></div>
+    <div class="card"><div class="eyebrow">Partidos de ${MESES[mo - 1]}</div>${list || '<p class="muted small">Este mes no hay jornadas.</p>'}</div></section>`;
+}
 function navbar() {
   const b = (t, ic, l) => `<button class="${S.ui.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}" aria-label="${l}">${ic}<span>${l}</span></button>`;
   return `<nav class="bottom">${b('match', IC.match, 'Partido')}${b('stats', IC.stats, 'Estadísticas')}${b('settings', IC.gear, 'Ajustes')}</nav>`;
@@ -1519,6 +1577,15 @@ async function buildTeamExcel(manual = false) {
     const meta = await call('get_spreadsheet', {}, { read: true });
     const extra = meta.sheets.map(x => x.properties).filter(x => x.sheetId === tplId || (!/^\s*\d+\s*-/.test(x.title) && !['APP', 'FFCV', 'AVISOS'].includes(x.title)));
     if (extra.length) await call('update_spreadsheet', { requests: extra.map(x => ({ deleteSheet: { sheetId: x.sheetId } })) });
+    // una hoja vacía «N - DESCANSO» en cada jornada sin partido, para que el salto de número se vea en el Excel
+    const rests = FFCV_SNAP.cal.filter(x => /descansa/i.test(x[3] + ' ' + x[4])).map(x => x[0]);
+    if (rests.length) {
+      const meta2 = await call('get_spreadsheet', {}, { read: true });
+      const js = meta2.sheets.map(x => x.properties).filter(x => /^\s*\d+\s*-/.test(x.title));
+      const reqs = rests.map(n => ({ addSheet: { properties: { title: `${n} - DESCANSO`, index: js.filter(x => parseInt(x.title) < n).length + rests.filter(r => r < n).length, gridProperties: { rowCount: 10, columnCount: 6 } } } }));
+      await call('update_spreadsheet', { requests: reqs });
+      await gfetch(`${me}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: rests.map(n => ({ range: `${qs(n + ' - DESCANSO')}!A2:A3`, values: [[`LIGA - JORNADA ${n}`], ['DESCANSO: esta jornada no jugamos']] })) }) });
+    }
     S.settings.build = null; UI.buildMsg = ''; S.current = null; persist();
     showToast(`Excel creado: ${newSheets.length} jornadas y ${players.length} jugadoras de la federación.`);
     UI.building = false; initAuth();
@@ -1770,6 +1837,8 @@ function renderSheet() {
 function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]]; o[ks[ks.length - 1]] = val; }
 const ACT = {
   noop() {},
+  calToggle() { if (S.ui.tab === 'cal') S.ui.tab = S.ui.prevTab || 'match'; else { S.ui.prevTab = S.ui.tab; S.ui.tab = 'cal'; S.ui.calMonth = calStartMonth(); } persist(); render(); window.scrollTo(0, 0); },
+  calMove(el) { const [y, mo] = (S.ui.calMonth || calStartMonth()).split('-').map(Number); const d = new Date(y, mo - 1 + (+el.dataset.v), 1); S.ui.calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; persist(); render(); },
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
   stepGo(el) { const i = STEPS.findIndex(([k]) => k === S.ui.step) + +el.dataset.v; if (i < 0 || i >= STEPS.length) return; S.ui.step = STEPS[i][0]; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },

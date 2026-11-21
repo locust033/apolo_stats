@@ -7,7 +7,24 @@ import fs from 'node:fs';
 import { configured, sheetsMeta, readRange, writeRange, clearRange, batchUpdate, setAvisosKey } from './lib.mjs';
 
 const JUVENIL = { t: '22', c: '905431657', g: '905431660', team: '905446426' };
-import { get, pool } from './ffcvhttp.mjs';
+import { get, pool, HEADERS } from './ffcvhttp.mjs';
+// Escudo de cada equipo: se descarga una vez a data/escudos/<cod>.<ext> (lo sirve GitHub Pages junto a la app)
+async function crest(cod, url) {
+  if (!url) return '';
+  const path = String(url).split('?')[0]; const ext = (path.match(/\.(png|jpe?g|gif|webp|svg)$/i) || [, 'png'])[1].toLowerCase();
+  const rel = `escudos/${cod}.${ext}`; const file = `data/${rel}`;
+  if (fs.existsSync(file)) return rel;
+  for (const host of ['https://ffcv.es', 'https://resultadosffcv.isquad.es']) {
+    try {
+      const r = await fetch(/^https?:/.test(url) ? url : host + url, { headers: { ...HEADERS, Accept: 'image/*', 'Sec-Fetch-Dest': 'image', 'Sec-Fetch-Mode': 'no-cors' } });
+      const ct = r.headers.get('content-type') || '';
+      if (!r.ok || !/image/.test(ct)) continue;
+      fs.mkdirSync('data/escudos', { recursive: true }); fs.writeFileSync(file, Buffer.from(await r.arrayBuffer()));
+      return rel;
+    } catch (e) {}
+  }
+  console.log('Sin escudo:', cod, url); return '';
+}
 const MAX_AGE_H = 6;
 const FORCE = process.env.FORCE === '1';
 const played = p => /\d+\s*-\s*\d+/.test(p.resultado || '') && String(p.estado) !== '0';
@@ -24,7 +41,11 @@ async function build({ t: T, c: C, g: G, team: APOLO }) {
   const clas = await get(`api/clasificaciones/clasificaciones_ajax.php?cod_grupo=${G}&cod_jornada=${lastJ}`);
 
   const rows = [['at', new Date().toISOString()]];
-  for (const c of clas.clasificacion || []) rows.push(['C', +c.posicion, String(c.codequipo), c.nombre, +c.jugados || 0, +c.ganados || 0, +c.empatados || 0, +c.perdidos || 0, +c.goles_a_favor || 0, +c.goles_en_contra || 0, +c.puntos || 0, (c.racha_partidos || []).map(r => r.tipo).join('')]);
+  const imgs = new Map(); for (const p of all) { imgs.set(String(p.cod_equipo_local), imgs.get(String(p.cod_equipo_local)) || p.escudo_local); imgs.set(String(p.cod_equipo_visitante), imgs.get(String(p.cod_equipo_visitante)) || p.escudo_visitante); }
+  for (const c of clas.clasificacion || []) {
+    const esc = await crest(String(c.codequipo), c.url_img || imgs.get(String(c.codequipo)));
+    rows.push(['C', +c.posicion, String(c.codequipo), c.nombre, +c.jugados || 0, +c.ganados || 0, +c.empatados || 0, +c.perdidos || 0, +c.goles_a_favor || 0, +c.goles_en_contra || 0, +c.puntos || 0, (c.racha_partidos || []).map(r => r.tipo).join(''), esc]);
+  }
   for (const p of done) rows.push(['M', p.j, p.fecha, String(p.cod_equipo_local), String(p.cod_equipo_visitante), p.local, p.visitante, p.resultado.replace(/\s*-\s*/, ' - ')]);
   // calendario del Apolo (todas las jornadas, jugadas o no)
   for (const p of all.filter(p => String(p.cod_equipo_local) === APOLO || String(p.cod_equipo_visitante) === APOLO).sort((a, b) => a.j - b.j))
