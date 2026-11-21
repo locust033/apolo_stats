@@ -468,3 +468,10 @@ nav.bottom button.on .ic { color: var(--accent); }
 .sizeseg { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .sizeseg .seg { flex: 1; }
 .sizeseg .seg button { min-height: 34px; }
+
+/* jornadas de descanso */
+.jchip.rest, .res.rest { background: repeating-linear-gradient(135deg, var(--paper) 0 6px, color-mix(in srgb, var(--line) 45%, transparent) 6px 8px); border-color: var(--line); }
+.jchip.rest span { font-style: italic; }
+.jchip.rest em { color: var(--muted); font-weight: 600; }
+.res.rest { border-left: 4px solid var(--line); }
+.res.rest b { color: var(--muted); }

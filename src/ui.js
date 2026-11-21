@@ -268,6 +268,11 @@ async function refreshSheets() {
     S.settings.hasAvisos = tabs.includes('AVISOS'); S.settings.hasFfcvTab = tabs.includes('FFCV'); S.settings.hasApp = tabs.includes('APP');
     const list = all.filter(s => /^\s*\d+\s*-/.test(s.title));
     if (list.length) { S.sheets = list; }
+    // si una hoja cambia de nombre (p. ej. al renumerar jornadas), lo guardado en el móvil la sigue
+    for (const x of list) {
+      const lm = S.matches[x.id]; if (lm && lm.title !== x.title) lm.title = x.title;
+      const g = S.stats.sums[x.id]; if (g && g.title !== x.title) { g.title = x.title; g.n = sheetShort(x.title).n; }
+    }
     if (p && p.properties) S.settings.sheetTitle = p.properties.title;
     persist();
     UI.err.sheets = null;
@@ -747,7 +752,9 @@ function jornadaRail() {
   const chev = `<svg viewBox="0 0 24 24" class="ic chev ${open ? 'up' : ''}"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const head = `<button class="railhead ${resClass(cSum)}" data-act="railToggle" aria-expanded="${open}"><b>J${cs.n}</b><span class="rn">${esc(title(cs.name))}</span>${cSum && cSum.final ? `<em>${cSum.final.join('-')}</em>` : ''}<span class="sp"></span><span class="rl">${open ? 'Ocultar' : 'Jornadas'}</span>${chev}</button>`;
   if (!open) return `<div class="railwrap">${head}</div>`;
-  return `<div class="railwrap">${head}<div class="rail" id="rail">${S.sheets.map(s => {
+  const items = [...S.sheets.map(s => ({ n: sheetShort(s.title).n, s })), ...restDays().map(r => ({ n: r.n, rest: r }))].sort((a, b) => a.n - b.n);
+  return `<div class="railwrap">${head}<div class="rail" id="rail">${items.map(({ s, rest }) => {
+    if (rest) return `<div class="jchip rest"><b>J${rest.n}</b><span>Descanso</span><em>${esc(rest.fecha.slice(0, 5))}</em></div>`;
     const sh = sheetShort(s.title), sum = S.stats.sums[s.id], lm = S.matches[s.id];
     const res = sum && sum.final ? `${sum.final[0]}-${sum.final[1]}` : '';
     return `<button class="jchip ${resClass(sum)} ${String(S.current) === String(s.id) ? 'on' : ''} ${lm && lm.dirty ? 'dirty' : ''}" data-act="openJ" data-id="${s.id}" id="j${s.id}"><b>J${sh.n}</b><span>${esc(title(sh.name))}</span>${res ? `<em>${res}</em>` : ''}</button>`;
@@ -786,8 +793,12 @@ const nextBtn = (to, label) => `<button class="btn primary wide" data-act="step"
 
 // Calendario del Apolo: el de la federación (pestaña FFCV, se actualiza solo) o, si no hay, el guardado en la app. Sin jornadas de descanso.
 const ffcvCal = () => { const c = FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => !/descansa/i.test(x[3] + ' ' + x[4])).sort((a, b) => a[0] - b[0]) : []; return c; };
-const ffcvFor = m => { const f = ffcvCal()[sheetShort(m.title).n - 1]; return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
-const awayOf = t => { const f = ffcvCal()[sheetShort(t).n - 1]; return !!f && !isOurs(f[3]); };
+// Cada hoja «N - RIVAL» es la jornada N de la federación (con los descansos, la numeración salta)
+const calOf = t => { const n = sheetShort(t).n; return ffcvCal().find(x => x[0] === n); };
+// Jornadas en las que descansamos: [jornada, fecha]
+const restDays = () => FFCV_SNAP && FFCV_SNAP.cal ? FFCV_SNAP.cal.filter(x => /descansa/i.test(x[3] + ' ' + x[4])).map(x => ({ n: x[0], fecha: x[1] })).sort((a, b) => a.n - b.n) : [];
+const ffcvFor = m => { const f = calOf(m.title); return f ? { j: f[0], fecha: f[1], hora: f[2], local: f[3], visit: f[4], campo: f[5], acta: f[6] } : null; };
+const awayOf = t => { const f = calOf(t); return !!f && !isOurs(f[3]); };
 // convierte un marcador del Excel (local - visitante) a "nosotras - rival"
 const ourView = (s, away) => { const m = str(s).match(/(\d+)\s*-\s*(\d+)/); if (!m) return str(s); return away ? `${m[2]} - ${m[1]}` : `${m[1]} - ${m[2]}`; };
 const ffcvAppUrl = f => `https://resultadosffcv.isquad.es/partido.php?id_competition=${(ffcvCfg() || {}).c}&id_partido=${f.acta}&id_torneo=${(ffcvCfg() || {}).g}`;
@@ -1132,7 +1143,7 @@ function teamStats(A) {
   const tr = ['1-15', '16-30', '31-45', '46-60', '61-75', '76-90'];
   const top = (k, n = 5) => [...A.players].filter(p => p[k] > 0).sort((a, b) => b[k] - a[k]).slice(0, n);
   return `<div class="tiles">${tiles.map(([l, v]) => `<div class="tile"><small>${l}</small><b>${v}</b></div>`).join('')}</div>
-    <div class="card"><div class="eyebrow">Resultados</div><div class="results">${A.games.map(g => { const f = g.final; const r = !f ? '' : f[0] > f[1] ? 'w' : f[0] === f[1] ? 'd' : 'l';
+    <div class="card"><div class="eyebrow">Resultados</div><div class="results">${[...A.games, ...restDays().filter(r => A.games.some(g => g.n > r.n))].sort((a, b) => a.n - b.n).map(g => { if (!g.id) return `<div class="res rest"><small>J${g.n}</small><b>—</b><span>Descanso</span></div>`; const f = g.final; const r = !f ? '' : f[0] > f[1] ? 'w' : f[0] === f[1] ? 'd' : 'l';
       return `<button class="res ${r}" data-act="openJ" data-id="${g.id}" data-go="1"><i>${{ w: 'V', d: 'E', l: 'D' }[r] || ''}</i><small>J${g.n}</small><b>${f ? f.join('-') : '—'}</b><span>${esc(title(sheetShort(g.title).name))}</span></button>`; }).join('')}</div>
       <p class="muted small">V ganado · E empate · D derrota. Toca uno para abrir la jornada. Porterías a cero: <b>${t.cs}</b>.</p></div>
     <div class="card"><div class="eyebrow">Goles por parte</div>
@@ -1494,13 +1505,13 @@ async function buildTeamExcel(manual = false) {
     const ourSys = rows.findIndex((r, i) => i > L.total && /^\d/.test(str(r[7])));
     if (ourSys >= 0) await call('update_values', { range: `${qs(tplTitle)}!H${ourSys + 1}`, values: [['']] });
     // una hoja por jornada
-    const dup = cal.map((f, i) => ({ duplicateSheet: { sourceSheetId: tplId, insertSheetIndex: i, newSheetName: `${i + 1} - ${shortRival(isOurs(f[3]) ? f[4] : f[3])}` } }));
+    const dup = cal.map((f, i) => ({ duplicateSheet: { sourceSheetId: tplId, insertSheetIndex: i, newSheetName: `${f[0]} - ${shortRival(isOurs(f[3]) ? f[4] : f[3])}` } }));
     const res = await call('update_spreadsheet', { requests: dup });
     const newSheets = (res.replies || []).map(r => r.duplicateSheet && r.duplicateSheet.properties).filter(Boolean);
     const data = [];
     newSheets.forEach((p, i) => {
       const f = cal[i]; const rival = up(isOurs(f[3]) ? f[4] : f[3]);
-      data.push({ range: `${qs(p.title)}!A2`, values: [[`LIGA - JORNADA ${i + 1}`]] }, { range: `${qs(p.title)}!A5`, values: [[rival]] }, { range: `${qs(p.title)}!A${L.hdr}`, values: [[up(cfg.name.replace(/'[^']*'/g, '')).trim()]] });
+      data.push({ range: `${qs(p.title)}!A2`, values: [[`LIGA - JORNADA ${cal[i][0]}`]] }, { range: `${qs(p.title)}!A5`, values: [[rival]] }, { range: `${qs(p.title)}!A${L.hdr}`, values: [[up(cfg.name.replace(/'[^']*'/g, '')).trim()]] });
       if (rivRow >= 0) data.push({ range: `${qs(p.title)}!H${rivRow + 1}`, values: [[rival]] });
     });
     for (let i = 0; i < data.length; i += 80) await gfetch(`${me}/values:batchUpdate`, { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: data.slice(i, i + 80) }) });
