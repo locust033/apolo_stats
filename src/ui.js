@@ -2082,7 +2082,7 @@ async function splashRun(work) {
   splashMsg('');
   try { ball.style.animation = 'none'; await ball.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-26px) scale(1.06)', offset: .45 }, { transform: 'translateY(0) scale(.9)' }], { duration: 420, easing: 'ease-out' }).finished; } catch (e) {}
   sp.classList.add('out');
-  setTimeout(() => sp.remove(), 450);
+  setTimeout(() => sp.remove(), 550);
 }
 // si la app vuelve después de un buen rato en segundo plano (y no hay directo), se recarga entera, como recién abierta
 let hiddenAt = 0;
