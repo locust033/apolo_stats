@@ -553,3 +553,35 @@ nav.bottom button.on .ic { color: var(--accent); }
 .mcell.now { border-color: var(--accent); }
 .mcell.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .mcell.on small, .mcell.on em { color: color-mix(in srgb, var(--paper) 75%, transparent); }
+
+/* inicio de la pestaña Partido */
+.homebtn { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); margin-right: -2px; }
+.homebtn .ic { width: 21px; height: 21px; }
+.top .matchup .vs + .vs { display: none; }
+.cap1 { text-transform: capitalize; }
+.hero { display: grid; gap: 12px; width: 100%; text-align: left; border: 1.5px solid var(--line); }
+.hero .eyebrow { display: flex; align-items: center; gap: 6px; margin: 0; }
+.herorow { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; }
+.herorow b { display: block; font-size: 20px; font-weight: 800; line-height: 1.15; }
+.herometa { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px; font-weight: 600; color: var(--muted); margin-top: 4px; }
+.hero .btn { pointer-events: none; }
+.livedot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: livep 1.4s ease-in-out infinite; }
+@keyframes livep { 50% { opacity: .3; } }
+.hlist .eyebrow { margin-bottom: 4px; }
+.hmonth { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 12px 4px 4px; }
+.hrow { display: grid; grid-template-columns: 36px 34px 1fr auto auto; align-items: center; gap: 10px; width: 100%; padding: 9px 4px; border-bottom: 1px solid var(--line); background: none; text-align: left; border-radius: 0; }
+.hrow:last-child { border-bottom: 0; }
+.hrow .cj { font-family: var(--display); font-weight: 800; font-size: 17px; }
+.hrow .hname { display: grid; gap: 2px; font-weight: 700; font-size: 14.5px; min-width: 0; }
+.hrow .hname small { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.hrow .hname small .ha { width: 15px; height: 15px; } .hrow .hname small .ha .ic { width: 9.5px; height: 9.5px; }
+.hrow .cres { font-family: var(--display); font-size: 18px; font-weight: 800; }
+.hrow.w .cres { color: var(--good); } .hrow.d .cres { color: color-mix(in srgb, var(--yellow) 45%, var(--ink)); } .hrow.l .cres { color: var(--red); }
+.hrow.next { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 10px; }
+.hrow.rest { color: var(--muted); } .hrow.rest .hname { font-style: italic; font-weight: 600; }
+.hdirty { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.hlive { font-size: 11.5px; font-weight: 800; color: var(--red); }
+.seg.wide { display: flex; } .seg.wide button { flex: 1; }
+
+.top .homebtn ~ .matchup { font-size: 20px; gap: 6px; }
+.top .homebtn ~ .sync { max-width: 34vw; }

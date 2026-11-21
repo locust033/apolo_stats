@@ -574,6 +574,38 @@ nav.bottom button.on .ic { color: var(--accent); }
 .mcell.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .mcell.on small, .mcell.on em { color: color-mix(in srgb, var(--paper) 75%, transparent); }
 
+/* inicio de la pestaña Partido */
+.homebtn { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); margin-right: -2px; }
+.homebtn .ic { width: 21px; height: 21px; }
+.top .matchup .vs + .vs { display: none; }
+.cap1 { text-transform: capitalize; }
+.hero { display: grid; gap: 12px; width: 100%; text-align: left; border: 1.5px solid var(--line); }
+.hero .eyebrow { display: flex; align-items: center; gap: 6px; margin: 0; }
+.herorow { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; }
+.herorow b { display: block; font-size: 20px; font-weight: 800; line-height: 1.15; }
+.herometa { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px; font-weight: 600; color: var(--muted); margin-top: 4px; }
+.hero .btn { pointer-events: none; }
+.livedot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: livep 1.4s ease-in-out infinite; }
+@keyframes livep { 50% { opacity: .3; } }
+.hlist .eyebrow { margin-bottom: 4px; }
+.hmonth { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 12px 4px 4px; }
+.hrow { display: grid; grid-template-columns: 36px 34px 1fr auto auto; align-items: center; gap: 10px; width: 100%; padding: 9px 4px; border-bottom: 1px solid var(--line); background: none; text-align: left; border-radius: 0; }
+.hrow:last-child { border-bottom: 0; }
+.hrow .cj { font-family: var(--display); font-weight: 800; font-size: 17px; }
+.hrow .hname { display: grid; gap: 2px; font-weight: 700; font-size: 14.5px; min-width: 0; }
+.hrow .hname small { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.hrow .hname small .ha { width: 15px; height: 15px; } .hrow .hname small .ha .ic { width: 9.5px; height: 9.5px; }
+.hrow .cres { font-family: var(--display); font-size: 18px; font-weight: 800; }
+.hrow.w .cres { color: var(--good); } .hrow.d .cres { color: color-mix(in srgb, var(--yellow) 45%, var(--ink)); } .hrow.l .cres { color: var(--red); }
+.hrow.next { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 10px; }
+.hrow.rest { color: var(--muted); } .hrow.rest .hname { font-style: italic; font-weight: 600; }
+.hdirty { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.hlive { font-size: 11.5px; font-weight: 800; color: var(--red); }
+.seg.wide { display: flex; } .seg.wide button { flex: 1; }
+
+.top .homebtn ~ .matchup { font-size: 20px; gap: 6px; }
+.top .homebtn ~ .sync { max-width: 34vw; }
+
 </style>
 </head>
 <body>
@@ -1303,7 +1335,7 @@ async function initAuth() {
   await importFfcvIfPending();
   let jq = null; try { jq = sessionStorage.getItem('apolo-j'); sessionStorage.removeItem('apolo-j'); } catch (e) {}
   if (location.search) history.replaceState(null, '', location.pathname);
-  if (jq && sheetById(jq)) { S.current = +jq; S.ui.tab = 'match'; } else pickStartJornada();
+  if (jq && sheetById(jq)) { S.current = +jq; S.ui.tab = 'match'; S.ui.home = false; } else pickStartJornada();
   const m = cur();
   // sin cambios pendientes en el móvil, se vuelve a leer del Excel para tener lo último
   if (S.settings.build) { await loadFfcv(); UI.hold = false; buildTeamExcel(); if (!UI.buildTimer) UI.buildTimer = setInterval(() => { if (S.settings.build && !UI.building) buildTeamExcel(); else if (!S.settings.build) { clearInterval(UI.buildTimer); UI.buildTimer = null; } }, 60000); return; }
@@ -1771,8 +1803,9 @@ function render() {
   const y = window.scrollY;
   const m = cur();
   // el «APOLO vs RIVAL» solo en la pestaña Partido; en las demás, solo el nombre de la pestaña
-  const head = S.ui.tab === 'match' ? topbar(m) : `<header class="top"><div class="matchup"><span class="us">${{ stats: 'Estadísticas', settings: 'Ajustes', cal: 'Calendario' }[S.ui.tab] || ''}</span></div>${calBtn()}</header>`;
-  app.innerHTML = head + `<main id="main">${S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : S.ui.tab === 'cal' ? calView() : settingsView()}</main>` + navbar();
+  const home = S.ui.tab === 'match' && (S.ui.home || !m);
+  const head = home ? homeTop() : S.ui.tab === 'match' ? topbar(m) : `<header class="top"><div class="matchup"><span class="us">${{ stats: 'Estadísticas', settings: 'Ajustes', cal: 'Calendario' }[S.ui.tab] || ''}</span></div>${calBtn()}</header>`;
+  app.innerHTML = head + `<main id="main">${home ? homeView() : S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : S.ui.tab === 'cal' ? calView() : settingsView()}</main>` + navbar();
   window.scrollTo(0, y);
   // en las filas deslizables de botones, el elegido queda en el centro (al repintar se perdía la posición)
   for (const row of app.querySelectorAll('.chips.scroll')) {
@@ -1786,10 +1819,10 @@ function topbar(m) {
   let chip;
   if (mcpState === 'none') chip = `<button class="sync dirty" data-act="signin">Entrar con Google</button>`;
   else if (UI.sync === 'saving') chip = `<span class="sync busy">${ballSpin()}${esc(UI.syncMsg)}</span>`;
-  else if (m && m.dirty) chip = `<button class="sync dirty" data-act="save">Guardar en Excel</button>`;
-  else if (m && m.savedAt) chip = `<span class="sync ok">Guardado ${timeAgo(m.savedAt)}</span>`;
-  else chip = `<span class="sync ok">Al día con el Excel</span>`;
-  return `<header class="top"><div class="matchup"><span class="us">${esc(title(m ? m.team : '').replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span><span class="vs">vs</span><span class="them">${esc(opp)}</span></div>${chip}${calBtn()}</header>`
+  else if (m && m.dirty) chip = `<button class="sync dirty" data-act="save">Guardar</button>`;
+  else if (m && m.savedAt) chip = `<span class="sync ok" title="Guardado ${timeAgo(m.savedAt)}">Guardado</span>`;
+  else chip = `<span class="sync ok">Al día</span>`;
+  return `<header class="top"><button class="homebtn" data-act="goHome" aria-label="Volver a las jornadas">${IC.home}</button><div class="matchup"><span class="us">${esc(title(m ? m.team : '').replace(/^[A-Z]\.[A-Z]\.\s*/i, ''))}</span><span class="vs">vs</span><span class="them">${esc(opp)}</span></div>${chip}${calBtn()}</header>`
     + (UI.sync === 'error' ? `<div class="banner err" role="alert">${esc(UI.syncMsg)} <button class="link" data-act="save">Reintentar</button></div>` : '')
     + (UI.err.auth ? `<div class="banner err">${esc(UI.err.auth)}</div>` : '')
     + (UI.err.ffcv ? `<div class="banner err">${esc(UI.err.ffcv)}</div>` : '')
@@ -1871,6 +1904,43 @@ function jornadaRail() {
     return `<button class="jchip ${resClass(sum)} ${String(S.current) === String(s.id) ? 'on' : ''} ${lm && lm.dirty ? 'dirty' : ''}" data-act="openJ" data-id="${s.id}" id="j${s.id}"><b>J${sh.n}</b><span>${esc(title(sh.name))}</span>${res ? `<em>${res}</em>` : ''}</button>`;
   }).join('')}</div></div>`;
 }
+// ===== INICIO DE LA PESTAÑA PARTIDO: elegir jornada =====
+function homeTop() {
+  const t = ffcvCfg() && ffcvCfg().name ? title(ffcvCfg().name).replace(/^[A-Z]\.[A-Z]\.\s*/i, '') : '';
+  return `<header class="top"><div class="matchup"><span class="us">Jornadas</span>${t ? `<span class="vs">${esc(t)}</span>` : ''}</div>${mcpState === 'none' ? '<button class="sync dirty" data-act="signin">Entrar con Google</button>' : ''}${calBtn()}</header>`
+    + (UI.err.auth ? `<div class="banner err">${esc(UI.err.auth)}</div>` : '') + (UI.err.ffcv ? `<div class="banner err">${esc(UI.err.ffcv)}</div>` : '');
+}
+// Jornadas del Excel + descansos, con los datos de la federación (fecha, hora, casa/fuera)
+function homeItems() {
+  const items = S.sheets.map(sh => {
+    const n = sheetShort(sh.title).n, f = calOf(sh.title), sum = S.stats.sums[sh.id], lm = S.matches[sh.id];
+    const rival = f ? (isOurs(f[3]) ? f[4] : f[3]) : sheetShort(sh.title).name;
+    return { n, sh, d: f ? dmy(f[1]) : null, hora: f ? f[2] : '', home: f ? isOurs(f[3]) : null, rival, final: sum && sum.final, dirty: !!(lm && lm.dirty), live: !!(lm && ['h1', 'ht', 'h2'].includes(lm.clock.phase)) };
+  });
+  for (const r of restDays()) items.push({ n: r.n, rest: true, d: dmy(r.fecha) });
+  return items.sort((a, b) => a.n - b.n);
+}
+function homeView() {
+  if (!sid() || !S.sheets.length || S.settings.build) return matchView(null);
+  const it = homeItems(); const dayName = d => ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][d.getDay()];
+  const live = it.find(x => x.live); const next = live || it.find(x => !x.rest && !x.final);
+  const rc = x => !x.final ? '' : x.final[0] > x.final[1] ? 'w' : x.final[0] === x.final[1] ? 'd' : 'l';
+  const ha = x => x.home == null ? '' : `<i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>`;
+  const when = x => x.d ? `${dayName(x.d)} ${x.d.getDate()} ${MESES[x.d.getMonth()].slice(0, 3)}` : '';
+  const hero = next ? `<button class="card hero" data-act="openJ" data-go="1" data-id="${next.sh.id}">
+      <div class="eyebrow">${next.live ? '<span class="livedot"></span>Partido en directo' : 'Próxima jornada'} · J${next.n}</div>
+      <div class="herorow">${crestHtml(next.rival, 'big')}<div><b>${esc(title(next.rival))}</b>
+        <span class="herometa">${ha(next)}${next.home == null ? '' : next.home ? 'En casa' : 'Fuera'}${next.d ? ` · <span class="cap1">${when(next)}</span>` : ''}${next.hora ? ` · ${esc(next.hora)}` : ''}</span>
+        ${next.hora && !next.live ? `<span class="herometa">Citación ${esc(citOf(next.hora))}</span>` : ''}</div></div>
+      <span class="btn primary wide">${next.live ? 'Volver al directo' : 'Abrir jornada'}</span></button>` : '';
+  let lastM = '';
+  const rows = it.map(x => {
+    const mk = x.d ? MESES[x.d.getMonth()] : ''; const sep = mk && mk !== lastM ? `<div class="hmonth">${mk}</div>` : ''; if (mk) lastM = mk;
+    if (x.rest) return sep + `<div class="hrow rest"><span class="cj">J${x.n}</span><span class="crest none"><b>—</b></span><span class="hname">Descanso<small class="cap1">${x.d ? when(x) : ''}</small></span></div>`;
+    return sep + `<button class="hrow ${rc(x)} ${next && x.sh.id === next.sh.id ? 'next' : ''}" data-act="openJ" data-go="1" data-id="${x.sh.id}"><span class="cj">J${x.n}</span>${crestHtml(x.rival)}<span class="hname">${esc(title(x.rival))}<small>${ha(x)}<span class="cap1">${when(x)}</span>${x.hora && !x.final ? ` · ${esc(x.hora)}` : ''}</small></span>${x.dirty ? '<span class="hdirty" title="Cambios sin guardar"></span>' : ''}${x.final ? `<b class="cres">${x.final.join('-')}</b>` : x.live ? '<span class="hlive">En juego</span>' : ''}</button>`;
+  }).join('');
+  return `<section class="pad">${hero}<div class="card hlist"><div class="eyebrow">Todas las jornadas</div>${rows}</div></section>`;
+}
 // Al abrir la app: primera jornada sin resultado, salvo que haya un partido a medias en el móvil
 function pickStartJornada() {
   const m = cur();
@@ -1882,10 +1952,10 @@ function pickStartJornada() {
 function matchView(m) {
   if (!sid() || (!S.sheets.length && !S.settings.build)) return `<section class="pad"><div class="card"><h3 class="h3">Sin equipo conectado</h3><p>${ready() ? 'Conecta el Google Sheet de tu equipo en Ajustes, o añade uno buscándolo en la federación.' : 'Entra con tu cuenta de Google y conecta el Excel de tu equipo en Ajustes.'}</p><button class="btn primary" data-act="tab" data-v="settings">Ir a Ajustes</button></div></section>`;
   if (S.settings.build) return `<section class="pad"><div class="card"><h3 class="h3">Preparando el Excel de ${esc((ffcvCfg() || {}).name || 'este equipo')}</h3><p>${UI.building ? ballSpin() + ' ' : ''}${esc(UI.buildMsg || 'Un momento…')}</p>${UI.building ? '' : '<button class="btn" data-act="buildCheck">Comprobar ahora</button>'}</div></section>`;
-  if (!m) return jornadaRail() + `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
+  if (!m) return `<section class="pad"><p class="muted">Elige una jornada.</p></section>`;
   if (m.finalized) {
     const loading0 = UI.loading[m.sheetId] ? `<div class="banner">${ballSpin()} Leyendo ${esc(m.title)} del Excel…</div>` : '';
-    return jornadaRail() + loading0 + `<section class="pad">${summaryView(m)}</section>`;
+    return loading0 + `<section class="pad">${summaryView(m)}</section>`;
   }
   const step = S.ui.step;
   const si = STEPS.findIndex(([k]) => k === step);
@@ -1896,7 +1966,7 @@ function matchView(m) {
   const loading = UI.loading[m.sheetId] ? `<div class="banner">${ballSpin()} Leyendo ${esc(m.title)} del Excel…</div>` : '';
   const err = UI.err.match ? `<div class="banner err">${esc(UI.err.match)} <button class="link" data-act="reloadJ">Reintentar</button></div>` : '';
   const views = { previa: previaView, convocatoria: convView, once: onceView, rival: rivalView, directo: liveView, cierre: cierreView };
-  return (step === 'directo' ? '' : jornadaRail()) + tabs + loading + err + `<section class="pad">${views[step](m)}</section>`;
+  return tabs + loading + err + `<section class="pad">${views[step](m)}</section>`;
 }
 const field = (label, inner, cls = '') => `<label class="fld ${cls}"><span>${label}</span>${inner}</label>`;
 const inp = (path, v, attrs = '') => `<input data-bind="${path}" value="${esc(v)}" ${attrs}>`;
@@ -2357,6 +2427,7 @@ function settingsView() {
       ? teamsBlock()
       : field('Google Sheet (pega el enlace)', `<input id="sidInput" value="" placeholder="https://docs.google.com/spreadsheets/d/…" autocapitalize="off" autocorrect="off"><div class="acts"><button class="btn primary" data-act="saveSid">${S.settings.sid ? 'Añadir este equipo' : 'Conectar este Excel'}</button>${S.settings.sid ? '<button class="btn ghost" data-act="cancelSid">Cancelar</button>' : ''}</div>`)}
     ${UI.err.sid ? `<div class="banner err">${esc(UI.err.sid)}</div>` : ''}
+    ${field('Al abrir la app', `<div class="seg wide">${[['home', 'Inicio (jornadas)'], ['next', 'Próxima jornada']].map(([v, l]) => `<button class="${(S.settings.startView || 'home') === v ? 'on' : ''}" data-act="startView" data-v="${v}">${l}</button>`).join('')}</div>`)}
     ${field('Duración de cada parte', `<select data-bind="@settings.half">${[25, 30, 35, 40, 45].map(n => `<option value="${n}" ${+S.settings.half === n ? 'selected' : ''}>${n} minutos</option>`).join('')}</select>`)}
     ${CLIENT_ID_DEFAULT ? '' : field('ID de cliente de Google (OAuth)', inp('@settings.clientId', S.settings.clientId, 'placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off"'))}
     <div class="acts">${ready() ? '<button class="btn" data-act="reconnect">Volver a leer las jornadas</button><button class="btn ghost" data-act="signout">Cerrar sesión</button>' : '<button class="btn primary" data-act="signin">Entrar con Google</button>'}</div>
@@ -2667,7 +2738,7 @@ function activateProfile(id, fresh = null, dropCurrent = false) {
   Object.values(S.matches).forEach(migrateMatch);
   UI.sheet = null; UI.pickIn = null; UI.pickMove = null; UI.editSid = false; UI.err = {}; AV.loaded = false; AV.loading = false;
   FFCV_SNAP = null; loadFfcvCache();
-  S.ui.tab = 'match'; S.ui.scoutCod = null;
+  S.ui.tab = 'match'; S.ui.scoutCod = null; S.ui.home = true;
   persist(); render(); initAuth();
 }
 // Antes de cambiar de equipo: si hay jornadas sin guardar, pregunta
@@ -2891,8 +2962,8 @@ function renderSheet() {
     case 'unsaved': {
       h = 'Hay cambios sin guardar';
       body = `<p>Tienes cambios sin guardar en el Excel en ${s.list.map(t => `<b>${esc(t)}</b>`).join(', ')}.</p>
-        <div class="acts col"><button class="btn primary" data-act="unsavedSave">Guardar y continuar</button><button class="btn" data-act="unsavedSkip">Cambiar sin guardar</button><button class="btn ghost" data-act="unsavedBack">Volver atrás</button></div>
-        <p class="muted small">Si cambias sin guardar, los cambios se quedan apuntados en el móvil para cuando vuelvas a este equipo.</p>`;
+        <div class="acts col"><button class="btn primary" data-act="unsavedSave">Guardar y continuar</button><button class="btn" data-act="unsavedSkip">${s.ctx === 'home' ? 'Salir sin guardar' : 'Cambiar sin guardar'}</button><button class="btn ghost" data-act="unsavedBack">Volver atrás</button></div>
+        <p class="muted small">${s.ctx === 'home' ? 'Si sales sin guardar, lo apuntado se queda en el móvil y podrás guardarlo al volver a la jornada.' : 'Si cambias sin guardar, los cambios se quedan apuntados en el móvil para cuando vuelvas a este equipo.'}</p>`;
       break;
     }
     case 'confirm': { h = s.title; body = `<p>${s.text}</p><div class="acts"><button class="btn danger" data-act="${s.act}">${s.ok}</button><button class="btn" data-act="close">Cancelar</button></div>`; break; }
@@ -2916,10 +2987,16 @@ function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for 
 const ACT = {
   noop() {},
   calToggle() { if (S.ui.tab === 'cal') S.ui.tab = S.ui.prevTab || 'match'; else { S.ui.prevTab = S.ui.tab; S.ui.tab = 'cal'; S.ui.calMonth = calStartMonth(); } persist(); render(); window.scrollTo(0, 0); },
+  goHome() {
+    const go = () => { S.ui.home = true; S.ui.stepsOpen = false; UI.sync = null; persist(); render(); window.scrollTo(0, 0); };
+    const m = cur(); if (!m || !m.dirty) return go();
+    UI.pendingSwitch = go; UI.pendingCtx = 'home'; openSheet({ type: 'unsaved', list: [m.title], ctx: 'home' });
+  },
+  startView(el) { S.settings.startView = el.dataset.v; persist(); render(); },
   calPickMonth() { openSheet({ type: 'calmonth' }); },
   calSetMonth(el) { S.ui.calMonth = el.dataset.v; UI.sheet = null; persist(); renderSheet(); render(); },
   calDay(el) { openSheet({ type: 'calday', n: +el.dataset.n }); },
-  calOpenJ(el) { UI.sheet = null; renderSheet(); S.ui.tab = 'match'; UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  calOpenJ(el) { UI.sheet = null; renderSheet(); S.ui.tab = 'match'; S.ui.home = false; UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   async calRefresh() {
     if (!ready()) return signIn('');
     UI.calBusy = true; render();
@@ -2936,7 +3013,7 @@ const ACT = {
   stepGo(el) { const i = STEPS.findIndex(([k]) => k === S.ui.step) + +el.dataset.v; if (i < 0 || i >= STEPS.length) return; S.ui.step = STEPS[i][0]; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
   stepsToggle() { S.ui.stepsOpen = !S.ui.stepsOpen; persist(); render(); },
   stab(el) { S.ui.stab = el.dataset.v; persist(); render(); },
-  openJ(el) { if (el.dataset.go) { S.ui.tab = "match"; } UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  openJ(el) { if (el.dataset.go) { S.ui.tab = "match"; } S.ui.home = false; UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   railToggle() { S.ui.railOpen = !S.ui.railOpen; persist(); render(); if (S.ui.railOpen) { const c = document.getElementById('j' + S.current); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); } },
   reloadJ() { openMatch(S.current, { reload: true }); },
   askReload() { openSheet({ type: 'confirm', title: 'Volver a cargar desde el Excel', text: 'Se perderá lo que hayas apuntado en este móvil para esta jornada y no esté guardado.', ok: 'Cargar desde el Excel', act: 'doReload' }); },
@@ -3014,8 +3091,8 @@ const ACT = {
   askRemoveTeam() { openSheet({ type: 'confirm', title: 'Quitar este equipo de la app', text: `Se quita «${esc(S.settings.sheetTitle || 'este Excel')}» de la app y lo que tengas apuntado sin guardar en el móvil. El Google Sheet no se toca: puedes volver a añadirlo cuando quieras.`, ok: 'Quitar', act: 'doRemoveTeam' }); },
   doRemoveTeam() { closeSheet(); const other = Object.keys(S.profiles || {})[0]; if (!other) return; const gone = sid(); activateProfile(other, null, true); delete S.profiles[gone]; persist(); render(); },
   async unsavedSave() {
-    const fn = UI.pendingSwitch; closeSheet();
-    for (const m of Object.values(S.matches).filter(x => x.dirty)) { await saveToSheet(m); if (m.dirty) { showToast('No se pudo guardar ' + m.title + '. No he cambiado de equipo.'); return; } }
+    const fn = UI.pendingSwitch; const ctx = UI.sheet && UI.sheet.ctx; closeSheet();
+    for (const m of Object.values(S.matches).filter(x => x.dirty)) { await saveToSheet(m); if (m.dirty) { showToast('No se pudo guardar ' + m.title + '. ' + (ctx === 'home' ? 'Sigues en la jornada.' : 'No he cambiado de equipo.')); return; } }
     UI.pendingSwitch = null; if (fn) fn();
   },
   unsavedSkip() { const fn = UI.pendingSwitch; UI.pendingSwitch = null; closeSheet(); if (fn) fn(); },
@@ -3311,6 +3388,7 @@ function start() {
   if (S.current != null && !S.matches[S.current] && (sheetById(S.current) || S.sheets[0])) S.matches[S.current] = seedMatch(sheetById(S.current) || S.sheets[0]);
   // al abrir la app se empieza de cero: pestaña Partido, en la jornada que toca (salvo un directo en marcha)
   S.ui.tab = 'match'; S.ui.stepsOpen = false;
+  { const m0 = cur(); S.ui.home = !(m0 && ['h1', 'ht', 'h2'].includes(m0.clock.phase)) && S.settings.startView !== 'next'; }
   render();
   const chip = document.getElementById('j' + S.current); if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest' });
   splashRun(initAuth());
