@@ -1601,7 +1601,9 @@ function render() {
   const app = $('#app'); if (!app) return;
   const y = window.scrollY;
   const m = cur();
-  app.innerHTML = topbar(m) + `<main id="main">${S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : settingsView()}</main>` + navbar();
+  // el «APOLO vs RIVAL» solo en la pestaña Partido; en las demás, solo el nombre de la pestaña
+  const head = S.ui.tab === 'match' ? topbar(m) : `<header class="top"><div class="matchup"><span class="us">${S.ui.tab === 'stats' ? 'Estadísticas' : 'Ajustes'}</span></div></header>`;
+  app.innerHTML = head + `<main id="main">${S.ui.tab === 'match' ? matchView(m) : S.ui.tab === 'stats' ? statsView() : settingsView()}</main>` + navbar();
   window.scrollTo(0, y);
   // en las filas deslizables de botones, el elegido queda en el centro (al repintar se perdía la posición)
   for (const row of app.querySelectorAll('.chips.scroll')) {
