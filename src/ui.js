@@ -792,10 +792,10 @@ function calView() {
     ? `<div class="cgame rest"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}</span><span class="crest none"><b>—</b></span><span class="cname">Descanso</span></div>`
     : `<button data-act="calDay" data-n="${x.n}" class="cgame ${rc(x)}"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}${x.hora ? `<br><small>${esc(x.hora)}</small>` : ''}</span>${crestHtml(x.rival)}<span class="cname">${esc(title(x.rival))}<small><i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>${x.home ? 'En casa' : 'Fuera'}</small></span>${x.final ? `<b class="cres">${x.final.join('-')}</b>` : ''}</button>`).join('');
   return `<section class="pad"><div class="card calcard">
-    <div class="calhead"><button class="btn icon" data-act="calMove" data-v="-1" ${curM <= minM ? 'disabled' : ''} aria-label="Mes anterior">‹</button><h3 class="h3">${MESES[mo - 1]} <span class="muted">${y}</span></h3><button class="btn icon" data-act="calMove" data-v="1" ${curM >= maxM ? 'disabled' : ''} aria-label="Mes siguiente">›</button></div>
+    <div class="calhead"><button class="btn icon" data-act="calMove" data-v="-1" ${curM <= minM ? 'disabled' : ''} aria-label="Mes anterior">‹</button><button class="calmonth" data-act="calPickMonth" aria-label="Elegir mes"><span>${MESES[mo - 1]}</span> <span class="muted">${y}</span><svg viewBox="0 0 24 24" class="ic chev"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="btn icon" data-act="calMove" data-v="1" ${curM >= maxM ? 'disabled' : ''} aria-label="Mes siguiente">›</button></div>
     <div class="cweek">${wd}</div><div class="cgrid">${cells.join('')}</div>
-    <div class="calfoot"><p class="calkey muted small"><i class="ha h">${IC.home}</i>En casa <i class="ha a">${IC.plane}</i>Fuera</p><button class="btn small" data-act="calRefresh" ${UI.calBusy ? 'disabled' : ''}>${UI.calBusy ? ballSpin() + ' Actualizando…' : '↻ Actualizar'}</button></div>
-    <p class="muted small calage">Federación: ${ffcvAge()}</p></div>
+    <div class="calfoot"><p class="calkey muted small"><i class="ha h">${IC.home}</i>En casa <i class="ha a">${IC.plane}</i>Fuera</p><button class="calref" data-act="calRefresh" ${UI.calBusy ? 'disabled' : ''}>${UI.calBusy ? ballSpin() + ' Actualizando' : '↻ Actualizar'}</button></div>
+    <p class="calage">Federación: ${ffcvAge()}</p></div>
     <div class="card"><div class="eyebrow">Partidos de ${MESES[mo - 1]}</div>${list || '<p class="muted small">Este mes no hay jornadas.</p>'}</div></section>`;
 }
 function navbar() {
@@ -1699,6 +1699,18 @@ function plist(m, ids, act, extra = '') {
   const byId = rmap(m);
   return `<div class="plist">${ids.map(id => byId[id]).filter(Boolean).map(p => `<button data-act="${act}" data-id="${esc(p.id)}"><span class="disc">${esc(p.dorsal)}</span>${esc(title(p.name))}</button>`).join('')}${extra}</div>`;
 }
+// Elegir mes del calendario: los meses de la temporada, con sus partidos
+function renderCalMonths(root) {
+  const it = calItems(); if (!it.length) { UI.sheet = null; return; }
+  root.classList.add('open');
+  const a = new Date(it[0].d.getFullYear(), it[0].d.getMonth(), 1), b = it[it.length - 1].d; const months = [];
+  for (let d = new Date(a); d <= b; d.setMonth(d.getMonth() + 1)) months.push(new Date(d));
+  const cur = S.ui.calMonth || calStartMonth(), now = ymKey(new Date());
+  const body = `<div class="mgrid">${months.map(d => { const k = ymKey(d); const g = it.filter(x => ymKey(x.d) === k);
+    const games = g.filter(x => !x.rest).length, rest = g.some(x => x.rest);
+    return `<button class="mcell ${k === cur ? 'on' : ''} ${k === now ? 'now' : ''}" data-act="calSetMonth" data-v="${k}"><b>${MESES[d.getMonth()].slice(0, 3)}</b><small>${d.getFullYear()}</small><em>${games ? `${games} partido${games > 1 ? 's' : ''}` : '—'}</em>${rest ? '<em>+ descanso</em>' : ''}</button>`; }).join('')}</div>`;
+  root.innerHTML = `<div class="scrim" data-act="close"></div><div class="panel" role="dialog" aria-modal="true"><div class="grab"></div><div class="ph"><h3>Elegir mes</h3><button class="x" data-act="close" aria-label="Cerrar">×</button></div><div class="pb">${body}</div></div>`;
+}
 // Ficha de un día con partido en el calendario
 function renderCalDay(root, s) {
   const x = calItems().find(i => i.n === +s.n); if (!x) { UI.sheet = null; root.innerHTML = ''; root.classList.remove('open'); return; }
@@ -1714,6 +1726,7 @@ function renderSheet() {
   const root = $('#sheet'); if (!root) return;
   const s = UI.sheet; const m = cur();
   if (s && s.type === 'calday') return renderCalDay(root, s);
+  if (s && s.type === 'calmonth') return renderCalMonths(root);
   if (!s || !m) { root.innerHTML = ''; root.classList.remove('open'); return; }
   root.classList.add('open');
   const byId = rmap(m); const comp = compute(m, H());
@@ -1851,6 +1864,8 @@ function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for 
 const ACT = {
   noop() {},
   calToggle() { if (S.ui.tab === 'cal') S.ui.tab = S.ui.prevTab || 'match'; else { S.ui.prevTab = S.ui.tab; S.ui.tab = 'cal'; S.ui.calMonth = calStartMonth(); } persist(); render(); window.scrollTo(0, 0); },
+  calPickMonth() { openSheet({ type: 'calmonth' }); },
+  calSetMonth(el) { S.ui.calMonth = el.dataset.v; UI.sheet = null; persist(); renderSheet(); render(); },
   calDay(el) { openSheet({ type: 'calday', n: +el.dataset.n }); },
   calOpenJ(el) { UI.sheet = null; renderSheet(); S.ui.tab = 'match'; UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
   async calRefresh() {
