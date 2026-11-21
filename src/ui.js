@@ -784,14 +784,14 @@ function calView() {
     const x = byDay[d]; const dt = new Date(y, mo - 1, d); const wk = dt.getDay() === 0 || dt.getDay() === 6;
     const cls = `cday ${wk ? 'wk' : ''} ${+dt === +t ? 'today' : ''} ${x ? (x.rest ? 'rest' : 'game ' + rc(x)) : ''}`;
     const inner = `<small>${d}</small>${x ? (x.rest ? '<em>Desc.</em>' : `${crestHtml(x.rival)}<i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>`) : ''}`;
-    cells.push(x && x.sh ? `<button class="${cls}" data-act="openJ" data-go="1" data-id="${x.sh.id}" aria-label="Jornada ${x.n}: ${esc(title(x.rival))}">${inner}</button>` : `<div class="${cls}">${inner}</div>`);
+    cells.push(x && !x.rest ? `<button class="${cls}" data-act="calDay" data-n="${x.n}" aria-label="Jornada ${x.n}: ${esc(title(x.rival))}">${inner}</button>` : `<div class="${cls}">${inner}</div>`);
   }
   const wd = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((l, i) => `<span class="${i > 4 ? 'wk' : ''}">${l}</span>`).join('');
   const dayName = d => ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][d.getDay()];
   const list = inMonth.map(x => x.rest
     ? `<div class="cgame rest"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}</span><span class="crest none"><b>—</b></span><span class="cname">Descanso</span></div>`
-    : `<${x.sh ? `button data-act="openJ" data-go="1" data-id="${x.sh.id}"` : 'div'} class="cgame ${rc(x)}"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}${x.hora ? `<br><small>${esc(x.hora)}</small>` : ''}</span>${crestHtml(x.rival)}<span class="cname">${esc(title(x.rival))}<small><i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>${x.home ? 'En casa' : 'Fuera'}</small></span>${x.final ? `<b class="cres">${x.final.join('-')}</b>` : ''}</${x.sh ? 'button' : 'div'}>`).join('');
-  return `<section class="pad"><div class="card calcard">
+    : `<button data-act="calDay" data-n="${x.n}" class="cgame ${rc(x)}"><span class="cj">J${x.n}</span><span class="cdate">${dayName(x.d)} ${x.d.getDate()}${x.hora ? `<br><small>${esc(x.hora)}</small>` : ''}</span>${crestHtml(x.rival)}<span class="cname">${esc(title(x.rival))}<small><i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>${x.home ? 'En casa' : 'Fuera'}</small></span>${x.final ? `<b class="cres">${x.final.join('-')}</b>` : ''}</button>`).join('');
+  return `<section class="pad"><div class="calsync"><span class="muted small">Federación: ${ffcvAge()}</span><button class="btn small" data-act="calRefresh" ${UI.calBusy ? 'disabled' : ''}>${UI.calBusy ? ballSpin() + ' Actualizando…' : '↻ Actualizar'}</button></div><div class="card calcard">
     <div class="calhead"><button class="btn icon" data-act="calMove" data-v="-1" ${curM <= minM ? 'disabled' : ''} aria-label="Mes anterior">‹</button><h3 class="h3">${MESES[mo - 1]} <span class="muted">${y}</span></h3><button class="btn icon" data-act="calMove" data-v="1" ${curM >= maxM ? 'disabled' : ''} aria-label="Mes siguiente">›</button></div>
     <div class="cweek">${wd}</div><div class="cgrid">${cells.join('')}</div>
     <p class="calkey muted small"><i class="ha h">${IC.home}</i>En casa <i class="ha a">${IC.plane}</i>Fuera</p></div>
@@ -1698,9 +1698,21 @@ function plist(m, ids, act, extra = '') {
   const byId = rmap(m);
   return `<div class="plist">${ids.map(id => byId[id]).filter(Boolean).map(p => `<button data-act="${act}" data-id="${esc(p.id)}"><span class="disc">${esc(p.dorsal)}</span>${esc(title(p.name))}</button>`).join('')}${extra}</div>`;
 }
+// Ficha de un día con partido en el calendario
+function renderCalDay(root, s) {
+  const x = calItems().find(i => i.n === +s.n); if (!x) { UI.sheet = null; root.innerHTML = ''; root.classList.remove('open'); return; }
+  root.classList.add('open');
+  const fecha = `${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][x.d.getDay()]} ${x.d.getDate()} de ${MESES[x.d.getMonth()]}`;
+  const r = x.final ? (x.final[0] > x.final[1] ? 'w' : x.final[0] === x.final[1] ? 'd' : 'l') : '';
+  const body = `<div class="cdhead">${crestHtml(x.rival, 'big')}<div><b>${esc(title(x.rival))}</b><span class="cdha"><i class="ha ${x.home ? 'h' : 'a'}">${x.home ? IC.home : IC.plane}</i>${x.home ? 'En casa' : 'Fuera'}</span></div>${x.final ? `<em class="cdres ${r}">${x.final.join('-')}</em>` : ''}</div>
+    <dl class="cdinfo"><div><dt>Fecha</dt><dd>${esc(fecha)}</dd></div>${x.hora ? `<div><dt>Hora</dt><dd>${esc(x.hora)}${x.final ? '' : ` · citación ${esc(citOf(x.hora))}`}</dd></div>` : ''}${x.campo ? `<div><dt>Campo</dt><dd>${esc(title(lugarFmt(x.campo)))}</dd></div>` : ''}</dl>
+    ${x.sh ? `<button class="btn primary wide" data-act="calOpenJ" data-id="${x.sh.id}">${IC.match} Abrir la jornada en Partido</button>` : '<p class="muted small">Esta jornada no tiene hoja en el Excel.</p>'}`;
+  root.innerHTML = `<div class="scrim" data-act="close"></div><div class="panel" role="dialog" aria-modal="true"><div class="grab"></div><div class="ph"><h3>Jornada ${x.n}</h3><button class="x" data-act="close" aria-label="Cerrar">×</button></div><div class="pb">${body}</div></div>`;
+}
 function renderSheet() {
   const root = $('#sheet'); if (!root) return;
   const s = UI.sheet; const m = cur();
+  if (s && s.type === 'calday') return renderCalDay(root, s);
   if (!s || !m) { root.innerHTML = ''; root.classList.remove('open'); return; }
   root.classList.add('open');
   const byId = rmap(m); const comp = compute(m, H());
@@ -1838,6 +1850,18 @@ function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for 
 const ACT = {
   noop() {},
   calToggle() { if (S.ui.tab === 'cal') S.ui.tab = S.ui.prevTab || 'match'; else { S.ui.prevTab = S.ui.tab; S.ui.tab = 'cal'; S.ui.calMonth = calStartMonth(); } persist(); render(); window.scrollTo(0, 0); },
+  calDay(el) { openSheet({ type: 'calday', n: +el.dataset.n }); },
+  calOpenJ(el) { UI.sheet = null; renderSheet(); S.ui.tab = 'match'; UI.unlocked = {}; UI.editStats = {}; UI.rpEdit = null; S.ui.railOpen = false; UI.sync = null; openMatch(el.dataset.id); window.scrollTo(0, 0); },
+  async calRefresh() {
+    if (!ready()) return signIn('');
+    UI.calBusy = true; render();
+    try {
+      await refreshSheets(); await loadFfcv(); await loadStats(true);
+      try { await setAvisosKeyApp(S.settings.hasAvisos ? 'ffcv_sync' : 'ffcv_sync:' + ourCod(), new Date().toISOString(), mainSid()); UI.ffcvAsked = true; } catch (e) {}
+      showToast('Jornadas releídas del Excel. Pedidos también los datos nuevos de la federación: llegan en unos minutos.');
+    } catch (e) { showToast('No se pudo actualizar: ' + errText(e)); }
+    UI.calBusy = false; render();
+  },
   calMove(el) { const [y, mo] = (S.ui.calMonth || calStartMonth()).split('-').map(Number); const d = new Date(y, mo - 1 + (+el.dataset.v), 1); S.ui.calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; persist(); render(); },
   tab(el) { S.ui.tab = el.dataset.v; persist(); render(); window.scrollTo(0, 0); if (S.ui.tab === 'stats' && ready() && Object.keys(S.stats.sums).length < S.sheets.length) loadStats(); },
   step(el) { S.ui.step = el.dataset.v; S.ui.stepsOpen = false; persist(); render(); window.scrollTo(0, 0); },
