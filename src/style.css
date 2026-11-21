@@ -465,3 +465,6 @@ nav.bottom button.on .ic { color: var(--accent); }
 .ballspin svg { width: 100%; height: 100%; animation: sp-spin .8s linear infinite; display: block; }
 .ballspin.lg { width: 28px; height: 28px; }
 @media (prefers-reduced-motion: reduce) { #splash .sp-ball, #splash .sp-ball svg, .ballspin svg { animation: none; } }
+.sizeseg { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.sizeseg .seg { flex: 1; }
+.sizeseg .seg button { min-height: 34px; }

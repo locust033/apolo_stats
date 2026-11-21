@@ -13,7 +13,20 @@ const FORMATIONS = {
   '1.3.5.2':   {1:[50,6],4:[70,20],5:[50,17],6:[30,20],2:[88,50],8:[67,45],10:[50,59],7:[33,45],3:[12,50],9:[61,84],11:[39,84]},
   '1.3.4.3':   {1:[50,6],4:[70,20],5:[50,17],6:[30,20],2:[86,49],8:[61,45],10:[39,45],3:[14,49],7:[83,76],9:[50,85],11:[17,76]},
   '1.5.3.2':   {1:[50,6],2:[88,32],4:[69,20],5:[50,17],6:[31,20],3:[12,32],8:[68,51],7:[50,45],10:[32,51],9:[61,83],11:[39,83]},
+  // con menos jugadoras (se usan los mismos números de hueco, para que las estadísticas de posición sigan valiendo)
+  '1.4.3.2':   {1:[50,6],2:[85,25],4:[62,19],5:[38,19],3:[15,25],7:[78,50],6:[50,43],11:[22,50],9:[61,82],10:[39,82]},
+  '1.4.4.1':   {1:[50,6],2:[85,25],4:[62,19],5:[38,19],3:[15,25],7:[85,54],6:[61,47],8:[39,47],11:[15,54],9:[50,84]},
+  '1.3.4.2':   {1:[50,6],4:[70,20],5:[50,17],6:[30,20],2:[86,49],8:[61,45],10:[39,45],3:[14,49],9:[61,83],11:[39,83]},
+  '1.4.3.1':   {1:[50,6],2:[85,25],4:[62,19],5:[38,19],3:[15,25],7:[78,52],6:[50,45],11:[22,52],9:[50,83]},
+  '1.3.3.2':   {1:[50,6],4:[70,20],5:[50,17],6:[30,20],7:[80,48],8:[50,44],11:[20,48],9:[61,82],10:[39,82]},
+  '1.3.4.1':   {1:[50,6],4:[70,20],5:[50,17],6:[30,20],2:[86,49],8:[61,45],10:[39,45],3:[14,49],9:[50,84]},
+  '1.3.3.1':   {1:[50,6],4:[70,20],5:[50,17],6:[30,20],7:[80,50],8:[50,46],11:[20,50],9:[50,83]},
+  '1.4.2.1':   {1:[50,6],2:[85,25],4:[62,19],5:[38,19],3:[15,25],6:[62,48],8:[38,48],9:[50,83]},
+  '1.3.2.1':   {1:[50,6],4:[70,22],5:[50,18],6:[30,22],8:[64,50],10:[36,50],9:[50,83]},
+  '1.2.3.1':   {1:[50,6],4:[64,20],5:[36,20],7:[78,50],6:[50,45],11:[22,50],9:[50,83]},
 };
+// número de jugadoras de un sistema
+const fSize = f => Object.keys(FORMATIONS[f] || {}).length;
 const DEFAULT_FORMATION = '1.4.2.3.1';
 const RIVAL_POS = ['POR','LD','DFC','LI','MCD','MC','MCO','ED','EI','DC'];
 
@@ -424,4 +437,4 @@ function aggregate(summaries) {
   return { games, team, gamesMin, players: Object.values(byP) };
 }
 
-if (typeof module !== 'undefined') module.exports = { FORMATIONS, VAL_FIELDS, positionStats, slotScore, suggestLineup, nextCaptain, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };
+if (typeof module !== 'undefined') module.exports = { FORMATIONS, fSize, VAL_FIELDS, positionStats, slotScore, suggestLineup, nextCaptain, splitNote, joinNote, parseLayout, matchFromLayout, compute, finalStats, playerRowValues, scoreStrings, goalRows, summarize, aggregate, parseFecha, fmtFecha, guessFormation, rivalKey, fmtMin, eff, pkey };

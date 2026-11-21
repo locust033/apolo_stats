@@ -344,7 +344,7 @@ function autoStep(m) {
   if (ph === 'end') return 'cierre';
   const nCalled = m.roster.filter(p => m.called[p.id]).length;
   const nLine = Object.values(m.lineup).filter(id => m.called[id]).length;
-  if (nLine >= 11) return 'directo';
+  if (nLine >= fSize(m.formation)) return 'directo';
   if (nCalled > 0) return 'once';
   return 'previa';
 }
@@ -882,8 +882,15 @@ function pitch(m, mode, comp) {
   }
   return `<div class="pitch">${pitchSVG()}${html}</div>`;
 }
+// Cuántas jugadoras en el campo: 11 o menos (si no llegan las convocadas). Los sistemas se filtran por ese número.
+function sizeSeg(m) {
+  const n = fSize(m.formation); const called = m.roster.filter(p => m.called[p.id]).length;
+  return `<div class="sizeseg"><span class="muted small">En el campo</span><div class="seg">${[11, 10, 9, 8, 7].map(k => `<button class="${n === k ? 'on' : ''}" data-act="fieldSize" data-v="${k}">${k}</button>`).join('')}</div></div>
+    ${called && called < n ? `<p class="muted small">Solo hay ${called} convocadas: elige ${called < 7 ? 7 : called} arriba para usar un sistema de ${called < 7 ? 7 : called}.</p>` : ''}`;
+}
 function formationChips(m) {
-  return `<div class="chips scroll">${Object.keys(FORMATIONS).map(f => `<button class="chip ${m.formation === f ? 'on' : ''}" data-act="formation" data-v="${f}">${f}</button>`).join('')}</div>`;
+  const n = fSize(m.formation);
+  return `<div class="chips scroll">${Object.keys(FORMATIONS).filter(f => fSize(f) === n).map(f => `<button class="chip ${m.formation === f ? 'on' : ''}" data-act="formation" data-v="${f}">${f}</button>`).join('')}</div>`;
 }
 function onceView(m) {
   const byId = rmap(m);
@@ -891,15 +898,15 @@ function onceView(m) {
   const calledList = m.roster.filter(p => m.called[p.id]);
   const bench = calledList.filter(p => !placed.has(p.id));
   const nPlaced = Object.values(m.lineup).filter(id => m.called[id]).length;
-  return `${lockBar(m)}${formationChips(m)}
+  return `${lockBar(m)}${sizeSeg(m)}${formationChips(m)}
     ${field('Sistema tal y como lo apuntas en el Excel', inp('formationText', m.formationText, `placeholder="${esc(m.formation)}"`))}
-    <div class="sumline"><b class="big">${nPlaced}</b>/11 titulares <span class="sp"></span>${nPlaced < Object.keys(FORMATIONS[m.formation] || {}).length && !isLocked(m) ? '<button class="btn sm" data-act="suggestOnce">Sugerir once</button>' : ''}${nPlaced ? '<button class="btn ghost sm" data-act="clearOnce">Vaciar</button>' : ''}</div>
+    <div class="sumline"><b class="big">${nPlaced}</b>/${fSize(m.formation)} titulares <span class="sp"></span>${nPlaced < Object.keys(FORMATIONS[m.formation] || {}).length && !isLocked(m) ? '<button class="btn sm" data-act="suggestOnce">Sugerir once</button>' : ''}${nPlaced ? '<button class="btn ghost sm" data-act="clearOnce">Vaciar</button>' : ''}</div>
     ${captainLine(m)}
     ${pitch(m, 'once')}
     <p class="muted small center">Toca un hueco para colocar a una jugadora. Tócala otra vez para cambiarla o hacerla capitana.</p>
     <h3 class="h3">Suplentes <span class="muted">${bench.length}</span></h3>
     <div class="benchrow">${bench.map(p => `<span class="bchip"><span class="disc sm">${esc(p.dorsal)}</span>${esc(short(p.name))}</span>`).join('') || '<span class="muted small">Nadie en el banquillo</span>'}</div>
-    ${calledList.length < 11 ? `<div class="banner">Solo tienes ${calledList.length} convocadas. Vuelve a Convocatoria para añadir más.</div>` : ''}
+    
     ${nextBtn('rival', 'Apuntar el rival')}`;
 }
 
@@ -965,14 +972,14 @@ function liveView(m) {
     </div>
     <div class="seg">${[['us', 'Nuestro equipo'], ['rival', 'Apuntar rival']].map(([k, l]) => `<button class="${(S.ui.liveSide || 'us') === k ? 'on' : ''}" data-act="liveSide" data-v="${k}">${l}</button>`).join('')}</div>
     ${S.ui.liveSide === 'rival' ? rivalLive(m) : `
-    ${nTit < 11 ? `<div class="banner">Faltan titulares (${nTit}/11). Puedes completarlo en <button class="link" data-act="step" data-v="once">Once</button>.</div>` : ''}
+    ${nTit < fSize(m.formation) ? `<div class="banner">Faltan titulares (${nTit}/${fSize(m.formation)}). Puedes completarlo en <button class="link" data-act="step" data-v="once">Once</button>.</div>` : ''}
     ${imported ? `<div class="banner">Este partido ya estaba en el Excel. Si apuntas un gol nuevo, el marcador se recalcula solo con los goles apuntados aquí.</div>` : ''}
     <div class="quick two"><button class="btn rgoal" data-act="rgoalStart">${IC.ball} Gol rival</button><button class="btn" data-act="rcardStart">${IC.card('Y')} Tarjeta rival</button></div>
     <p class="muted small hint">Para un gol nuestro, toca a la goleadora en el campo. Mantén pulsada a una jugadora y arrástrala para cambiarla de posición.</p>
     ${UI.pickMove ? `<div class="pickbar"><span>Cambio de posición de <b>${esc(title(rmap(m)[UI.pickMove]?.name || ''))}</b>: toca su nueva posición (otra jugadora o un hueco libre)</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
-    ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale${Object.keys(comp.field).length < 11 ? ' o un hueco libre' : ''}</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
+    ${UI.pickIn ? `<div class="pickbar"><span>Entra <b>${esc(title(rmap(m)[UI.pickIn]?.name || ''))}</b>: toca a la jugadora que sale${Object.keys(comp.field).length < fSize(m.formation) ? ' o un hueco libre' : ''}</span><button class="link" data-act="pickCancel">Cancelar</button></div>` : ''}
     <div class="livepitch ${UI.pickIn || UI.pickMove ? 'picking' : ''}">${pitch(m, 'live', comp)}</div>
-    <div class="formline"><span class="muted small">${Object.keys(comp.field).length < 11 && m.clock.phase !== 'pre' ? `<b class="short">${Object.keys(comp.field).length} en el campo</b> · ` : ''}Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
+    <div class="formline"><span class="muted small">${Object.keys(comp.field).length < fSize(m.formation) && m.clock.phase !== 'pre' ? `<b class="short">${Object.keys(comp.field).length} en el campo</b> · ` : ''}Sistema ${esc(m.formation)}</span><button class="link" data-act="formSheet">Cambiar</button></div>
     <h3 class="h3">Banquillo <span class="muted small">toca una y luego a quién sustituye · mantén pulsada para tarjetas</span></h3>
     <div class="benchrow">${bench.map(p => { const c = comp.P[p.id]; const dis = c.expelled;
       return `<button class="bchip ${dis ? 'dim' : ''} ${UI.pickIn === p.id ? 'sel' : ''}" data-act="${dis ? 'noop' : 'benchIn'}" data-id="${esc(p.id)}"><span class="disc sm">${esc(p.dorsal)}</span><span class="bn">${esc(short(p.name))}<small>${c.min ? `${c.min}' jugados` : 'sin jugar'}${c.leftAt != null && !c.expelled ? ` · fuera desde el ${c.leftAt}'` : ''}</small></span>${c.expelled ? IC.card('R') : ''}</button>`; }).join('') || '<span class="muted small">Sin suplentes</span>'}</div>
@@ -1859,6 +1866,13 @@ const ACT = {
   addPool(el) { const m = cur(); const x = S.extrasPool[+el.dataset.i]; if (!x) return; const id = pkey(x.name, x.dorsal); if (!m.roster.some(p => p.id === id)) m.roster.push({ id, name: x.name, dorsal: x.dorsal, extra: true }); m.called[id] = true; touch(m); },
   rmExtra(el) { const m = cur(); const id = el.dataset.id; m.roster = m.roster.filter(p => p.id !== id); delete m.called[id]; for (const k in m.lineup) if (m.lineup[k] === id) delete m.lineup[k]; touch(m); },
   // once
+  fieldSize(el) {
+    const m = cur(); const k = +el.dataset.v; if (fSize(m.formation) === k) return;
+    const f = Object.keys(FORMATIONS).find(x => fSize(x) === k); if (!f) return;
+    m.formation = f; { const g = guessFormation(m.formationText); if (!m.formationText || Object.keys(FORMATIONS).includes(m.formationText) || (g && fSize(g) !== k)) m.formationText = ''; }
+    for (const sl of Object.keys(m.lineup)) if (!FORMATIONS[f][sl]) delete m.lineup[sl];
+    touch(m);
+  },
   formation(el) { const m = cur(); m.formation = el.dataset.v; if (!m.formationText || Object.keys(FORMATIONS).includes(m.formationText)) m.formationText = ''; touch(m); if (UI.sheet && UI.sheet.type === 'form') closeSheet(); },
   formSheet() { openSheet({ type: 'form' }); },
   slot(el) { openSheet({ type: 'slot', slot: el.dataset.slot }); },
